@@ -7,6 +7,7 @@ with live hotkey remapping and direct synchronization to config.json.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import tkinter as tk
 from collections.abc import Callable
@@ -17,6 +18,39 @@ from app.contracts import AppConfig, AudioEngineType
 from app.logging_setup import get_logger
 
 logger = get_logger("settings_ui")
+
+
+def _persist_groq_api_key_to_env(env_path: Path, api_key: str) -> None:
+    """Safely persist or update GROQ_API_KEY in .env file without destroying other variables."""
+    lines: list[str] = []
+    key_found = False
+    if env_path.exists():
+        try:
+            with open(env_path, encoding="utf-8") as f:
+                lines = f.readlines()
+        except Exception as e:
+            logger.warning("Could not read existing .env: %s", e)
+
+    new_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("GROQ_API_KEY=") or stripped.startswith("GROQ_API_KEY ="):
+            new_lines.append(f"GROQ_API_KEY={api_key}\n")
+            key_found = True
+        else:
+            new_lines.append(line)
+
+    if not key_found:
+        if new_lines and not new_lines[-1].endswith("\n"):
+            new_lines.append("\n")
+        new_lines.append(f"GROQ_API_KEY={api_key}\n")
+
+    try:
+        with open(env_path, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+        logger.info("GROQ_API_KEY persisted securely to .env")
+    except Exception as e:
+        logger.error("Failed to write GROQ_API_KEY to %s: %s", env_path, e)
 
 
 class SettingsModal:
@@ -44,8 +78,8 @@ class SettingsModal:
             return
 
         self.window = tk.Toplevel(self.parent)
-        self.window.title("VoiceFlow-Win - Configuración")
-        self.window.geometry("540x620")
+        self.window.title("MorocoVoice - Configuración")
+        self.window.geometry("540x680")
         self.window.resizable(False, False)
         self.window.configure(bg="#18181b")
 
@@ -65,7 +99,7 @@ class SettingsModal:
         """Center the modal on the current screen."""
         self.window.update_idletasks()
         w = 540
-        h = 640
+        h = 680
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
         x = max(0, (sw - w) // 2)
@@ -80,7 +114,7 @@ class SettingsModal:
 
         title_lbl = tk.Label(
             banner,
-            text="⚙️ Configuración de VoiceFlow-Win",
+            text="⚙️ Configuración de MorocoVoice",
             font=("Segoe UI", 12, "bold"),
             fg="#FBFBFD",
             bg="#27272a",
@@ -89,8 +123,8 @@ class SettingsModal:
 
         subtitle_lbl = tk.Label(
             banner,
-            text="v3.4.1",
-            font=("Segoe UI", 9),
+            text="v3.5.0",
+            font=("Segoe UI", 9, "bold"),
             fg="#FECA66",
             bg="#27272a",
         )
@@ -137,6 +171,9 @@ class SettingsModal:
         self._create_section_label(content, "MOTOR Y MODELOS DE INFERENCIA")
 
         self.var_engine = tk.StringVar(value=self.current_config.engine.value)
+        self.var_groq_api_key = tk.StringVar(
+            value=self.current_config.groq_api_key or os.getenv("GROQ_API_KEY", "")
+        )
         self.var_stt_model = tk.StringVar(value=self.current_config.groq_stt_model)
         self.var_llm_model = tk.StringVar(value=self.current_config.groq_llm_model)
 
@@ -161,6 +198,12 @@ class SettingsModal:
         )
         engine_menu.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+        self._create_masked_entry_row(
+            content,
+            label="Groq API Key:",
+            var=self.var_groq_api_key,
+            help_text="Clave de API enmascarada (almacenada segura en .env)",
+        )
         self._create_entry_row(
             content,
             label="Modelo STT Groq:",
@@ -197,7 +240,7 @@ class SettingsModal:
         status_bar = tk.Frame(self.window, bg="#1e1e24")
         self.status_bar_lbl = tk.Label(
             status_bar,
-            text="🟢 VoiceFlow-Win está activo en segundo plano. Dictado listo con: " + self.var_dictation.get(),
+            text="🟢 MorocoVoice está activo en segundo plano. Dictado listo con: " + self.var_dictation.get(),
             font=("Segoe UI", 8, "bold"),
             fg="#10b981",
             bg="#1e1e24",
@@ -206,7 +249,7 @@ class SettingsModal:
         self.var_dictation.trace_add(
             "write",
             lambda *_: self.status_bar_lbl.configure(
-                text="🟢 VoiceFlow-Win está activo en segundo plano. Dictado listo con: " + self.var_dictation.get()
+                text="🟢 MorocoVoice está activo en segundo plano. Dictado listo con: " + self.var_dictation.get()
             ),
         )
 
@@ -306,6 +349,68 @@ class SettingsModal:
         )
         entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
+    def _create_masked_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
+    ) -> None:
+        """Create a masked entry row with asterisks and an eye toggle button."""
+        row = tk.Frame(parent, bg="#18181b")
+        row.pack(fill=tk.X, pady=2)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg="#FBFBFD",
+            bg="#18181b",
+            width=20,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        entry_container = tk.Frame(row, bg="#18181b")
+        entry_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        entry = tk.Entry(
+            entry_container,
+            textvariable=var,
+            font=("Segoe UI", 9),
+            bg="#27272a",
+            fg="#FBFBFD",
+            insertbackground="#FBFBFD",
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground="#3f3f46",
+            highlightcolor="#3284C6",
+            show="*",
+        )
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        is_visible = [False]
+
+        def toggle_mask() -> None:
+            if is_visible[0]:
+                entry.configure(show="*")
+                eye_btn.configure(text="👁️")
+                is_visible[0] = False
+            else:
+                entry.configure(show="")
+                eye_btn.configure(text="🔒")
+                is_visible[0] = True
+
+        eye_btn = tk.Button(
+            entry_container,
+            text="👁️",
+            font=("Segoe UI", 8),
+            bg="#3f3f46",
+            fg="#FBFBFD",
+            activebackground="#52525b",
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            padx=4,
+            pady=0,
+            command=toggle_mask,
+        )
+        eye_btn.pack(side=tk.LEFT, padx=(4, 0))
+
     def _on_open_json(self) -> None:
         """Open config.json directly in Notepad for raw editing."""
         if not self.config_path.exists():
@@ -368,6 +473,13 @@ class SettingsModal:
 
             logger.info("Configuration saved successfully from settings modal.")
 
+            # Persist Groq API Key securely to .env if provided
+            groq_key_val = self.var_groq_api_key.get().strip()
+            if groq_key_val:
+                env_path = self.config_path.parent / ".env"
+                _persist_groq_api_key_to_env(env_path, groq_key_val)
+                os.environ["GROQ_API_KEY"] = groq_key_val
+
             # Construct new AppConfig
             from app.config import load_config
             new_config = load_config(self.config_path)
@@ -376,8 +488,8 @@ class SettingsModal:
             self.on_saved(new_config)
 
             messagebox.showinfo(
-                "Configuración Actualizada",
-                f"Cambios guardados con éxito.\n\nNuevo atajo de dictado: {dictation_val}\nMotor activo: {engine_type.value}",
+                "MorocoVoice - Configuración Actualizada",
+                f"Cambios guardados con éxito.\n\nNuevo atajo de dictado: {dictation_val}\nMotor activo: {engine_type.value}\nGroq API Key: Almacenada y enmascarada de forma segura.",
                 parent=self.window,
             )
             self._on_cancel()

@@ -14,11 +14,13 @@ build/
 Thumbs.db
 Desktop.ini
 
-# VoiceFlow Runtime & Models
+# VoiceFlow / MorocoVoice Runtime & Models
 app/audio/models/*.onnx
 app/audio/models/*.tmp
 voiceflow.log
 voiceflow.log.*
+morocovoice.log
+morocovoice.log.*
 .env
 
 # Pytest & Coverage

@@ -44,10 +44,10 @@ logger = setup_logging()
 
 # Win32 Mutex Constants
 ERROR_ALREADY_EXISTS = 183
-MUTEX_NAME = "Global\\VoiceFlowWin_SingleInstance_Mutex"
+MUTEX_NAME = "Global\\MorocoVoice_SingleInstance_Mutex"
 
 
-class VoiceFlowApplication:
+class MorocoVoiceApplication:
     """Central controller coordinating audio capture, VAD, STT, LLM, HUD and injection."""
 
     def __init__(self, root: tk.Tk, config: AppConfig) -> None:
@@ -120,7 +120,7 @@ class VoiceFlowApplication:
         handle = ctypes.windll.kernel32.CreateMutexW(None, True, MUTEX_NAME)
         last_err = ctypes.windll.kernel32.GetLastError()
         if last_err == ERROR_ALREADY_EXISTS:
-            logger.warning("Another instance of VoiceFlow-Win is already running. Exiting.")
+            logger.warning("Another instance of MorocoVoice is already running. Exiting.")
             if handle:
                 ctypes.windll.kernel32.CloseHandle(handle)
             return False
@@ -129,7 +129,7 @@ class VoiceFlowApplication:
 
     def start(self) -> None:
         """Perform staggered warm-up and start listener threads."""
-        logger.info("Starting VoiceFlow-Win runtime...")
+        logger.info("Starting MorocoVoice runtime...")
 
         # Level 1 Warm-up (blocking 2-5s if local)
         self.engine_mgr.warm_up()
@@ -140,10 +140,10 @@ class VoiceFlowApplication:
         # Start tray and hotkey listeners
         self.tray.start()
         self.hotkeys.start()
-        logger.info("VoiceFlow-Win is live and ready.")
+        logger.info("MorocoVoice is live and ready.")
 
         # Visual confirmation HUD banner on startup
-        self.hud.show(f"VoiceFlow Activo ({self.config.hotkey_dictation})", state=AppState.INJECTING)
+        self.hud.show(f"MorocoVoice Activo ({self.config.hotkey_dictation})", state=AppState.INJECTING)
         self.root.after(2500, self.hud.hide)
 
     def toggle_dictation(self) -> None:
@@ -340,12 +340,16 @@ class VoiceFlowApplication:
             pass
 
 
+# Backward compatibility alias
+VoiceFlowApplication = MorocoVoiceApplication
+
+
 def main() -> None:
-    """Bootstrap VoiceFlow-Win application."""
+    """Bootstrap MorocoVoice application."""
     config = load_config()
 
     root = tk.Tk()
-    app = VoiceFlowApplication(root, config)
+    app = MorocoVoiceApplication(root, config)
 
     if not app.enforce_single_instance():
         sys.exit(0)

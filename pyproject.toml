@@ -1,3 +1,15 @@
+[project]
+name = "morocovoice"
+version = "3.5.0"
+description = "Industrial voice dictation and contextual rewriting suite for Windows 10/11 x64 (Wispr Flow parity)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Ricardo García", email = "rgarcia@telat-group.com" }
+]
+keywords = ["dictation", "speech-to-text", "whisper", "groq", "windows", "voice", "rewriter"]
+
 [tool.ruff]
 line-length = 105
 target-version = "py311"

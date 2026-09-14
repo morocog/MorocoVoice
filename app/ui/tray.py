@@ -64,7 +64,7 @@ class SystemTrayManager:
         """Launch the system tray icon loop inside a daemon thread."""
         image = create_tray_icon_image()
         menu = pystray.Menu(
-            pystray.MenuItem("VoiceFlow-Win v3.4.1", None, enabled=False),
+            pystray.MenuItem("MorocoVoice v3.5.0", None, enabled=False),
             pystray.MenuItem(self._get_engine_label, None, enabled=False),
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
@@ -74,9 +74,9 @@ class SystemTrayManager:
         )
 
         self.icon = pystray.Icon(
-            name="VoiceFlow-Win",
+            name="MorocoVoice",
             icon=image,
-            title=f"VoiceFlow-Win: Dictado ({self.hotkey_dictation})",
+            title=f"MorocoVoice: Dictado ({self.hotkey_dictation})",
             menu=menu,
         )
 
@@ -90,7 +90,7 @@ class SystemTrayManager:
             if self.icon:
                 try:
                     self.icon.notify(
-                        title="VoiceFlow-Win Activo 🎙️",
+                        title="MorocoVoice Activo 🎙️",
                         message=f"Presiona {self.hotkey_dictation} para dictar o clic derecho para Configuración.",
                     )
                 except Exception:
@@ -113,7 +113,7 @@ class SystemTrayManager:
         if hotkey_dictation:
             self.hotkey_dictation = hotkey_dictation
         if self.icon:
-            self.icon.title = f"VoiceFlow-Win: Dictado ({self.hotkey_dictation})"
+            self.icon.title = f"MorocoVoice: Dictado ({self.hotkey_dictation})"
             self.icon.update_menu()
 
     def _on_settings_clicked(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:

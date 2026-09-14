@@ -14,7 +14,7 @@ import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-LOG_FILE_NAME = "voiceflow.log"
+LOG_FILE_NAME = "morocovoice.log"
 MAX_LOG_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 BACKUP_COUNT = 3
 
@@ -40,14 +40,14 @@ def setup_logging(log_dir: str | Path | None = None) -> logging.Logger:
     """Initialize structured rotating file logging."""
     global _root_logger_initialized
     if _root_logger_initialized:
-        return logging.getLogger("voiceflow")
+        return logging.getLogger("morocovoice")
 
     if log_dir is None:
         log_path = Path(LOG_FILE_NAME).resolve()
     else:
         log_path = (Path(log_dir) / LOG_FILE_NAME).resolve()
 
-    logger = logging.getLogger("voiceflow")
+    logger = logging.getLogger("morocovoice")
     logger.setLevel(logging.INFO)
     logger.handlers.clear()
 
