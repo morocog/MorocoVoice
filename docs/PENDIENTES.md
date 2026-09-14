@@ -6,8 +6,8 @@
 
 ## 🔴 1. VERIFICACIONES PENDIENTES EN CALIENTE (seguras, no urgentes)
 
-- [ ] **Prueba de Dictado en Caliente (`Alt + Space`):** Abrir el Bloc de Notas o Chrome, pulsar `Alt + Space`, hablar en español ("Reunión de Workforce Management a las tres de la tarde"), verificar el sonido `blip` y `pop`, y corroborar que el texto se escribe en pantalla.
-- [ ] **Prueba de Reescritura Contextual (`Ctrl + Shift + Space`):** Seleccionar una frase con errores en VS Code o Word, pulsar `Ctrl + Shift + Space` y validar que el LLM reemplace el texto contextualmente.
+- [x] **Prueba de Dictado en Caliente (`Win + Space` / `Alt + Space`) [v3.4.1]:** Probado y validado en caliente en Antigravity IDE con Groq Cloud (~1.2s de latencia por 350 caracteres).
+- [x] **Prueba de Reescritura Contextual (`Ctrl + Shift + Space`) [v3.4.1]:** Probado y validado en caliente en texto crudo seleccionado; reemplazo contextual sin conflictos con la terminal.
 - [ ] **Prueba de Atajo de Diagnóstico (`Ctrl + Shift + D`):** Pulsar `Ctrl + Shift + D` y corroborar que se abra `voiceflow.log` en el Bloc de Notas.
 - [ ] **Prueba de Salida Ordenada (`Ctrl + Shift + Q`):** Pulsar `Ctrl + Shift + Q` y verificar que el icono desaparezca de la bandeja del sistema y el proceso finalice limpiamente.
 - [x] **Configuración de `GROQ_API_KEY` (Completado):** Clave `MorocoVoice` configurada en `.env` y validada en caliente con `whisper-large-v3-turbo` y `qwen/qwen3.8-27b` (~400 ms de latencia).
@@ -18,7 +18,8 @@
 
 - [ ] **Soporte Directo CUDA 12 para Laptop `moroc`:** Configurar auto-detección de GPU NVIDIA para cambiar automáticamente a `device="cuda"` y `compute_type="float16"` cuando se ejecute en la estación personal.
 - [ ] **Empaquetado Binario Standalone (`PyInstaller` / `Nuitka`):** Crear un ejecutable `VoiceFlow.exe` portable de 1 solo archivo para no requerir entorno de Python visible.
-- [ ] **Panel de Configuración GUI Minimalista:** Ventana de ajustes rápidos accesible desde el menú de la bandeja para cambiar atajos y modelos en caliente.
+- [x] **Panel de Configuración GUI Minimalista [v3.4.1]:** Ventana visual reactiva con recarga en caliente, guardado atómico en `config.json` y personalización de atajos y modelos.
+- [ ] **Modo Push-to-Talk Opcional (Mantener presionado):** Permitir alternar entre modo Toggle y Push-to-Talk desde el panel de configuración.
 
 ---
 
