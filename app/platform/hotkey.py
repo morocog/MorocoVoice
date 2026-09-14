@@ -25,6 +25,7 @@ class ParsedHotkey:
     ctrl: bool
     alt: bool
     shift: bool
+    win: bool
     key_name: str
 
     def matches(self, active_keys: set[keyboard.Key | keyboard.KeyCode], pressed_key: keyboard.Key | keyboard.KeyCode) -> bool:
@@ -33,12 +34,15 @@ class ParsedHotkey:
         has_ctrl = keyboard.Key.ctrl in active_keys
         has_alt = keyboard.Key.alt in active_keys
         has_shift = keyboard.Key.shift in active_keys
+        has_win = keyboard.Key.cmd in active_keys
 
         if self.ctrl != has_ctrl:
             return False
         if self.alt != has_alt:
             return False
         if self.shift != has_shift:
+            return False
+        if self.win != has_win:
             return False
 
         # Target key check
@@ -60,15 +64,18 @@ def parse_hotkey_string(hotkey_str: str) -> ParsedHotkey | None:
     ctrl = False
     alt = False
     shift = False
+    win = False
     main_key = ""
 
     for token in tokens:
         if token in ("ctrl", "control"):
             ctrl = True
-        elif token == "alt":
+        elif token in ("alt", "menu"):
             alt = True
         elif token == "shift":
             shift = True
+        elif token in ("win", "windows", "cmd", "super"):
+            win = True
         else:
             main_key = token
 
@@ -80,6 +87,7 @@ def parse_hotkey_string(hotkey_str: str) -> ParsedHotkey | None:
         ctrl=ctrl,
         alt=alt,
         shift=shift,
+        win=win,
         key_name=main_key,
     )
 
@@ -178,6 +186,8 @@ class HotkeyListener:
             return keyboard.Key.ctrl
         if key in (keyboard.Key.shift_l, keyboard.Key.shift_r):
             return keyboard.Key.shift
+        if key in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r):
+            return keyboard.Key.cmd
         return key
 
     def _on_press(self, raw_key: keyboard.Key | keyboard.KeyCode) -> None:
