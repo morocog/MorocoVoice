@@ -141,6 +141,10 @@ class VoiceFlowApplication:
         self.hotkeys.start()
         logger.info("VoiceFlow-Win is live and ready.")
 
+        # Visual confirmation HUD banner on startup
+        self.hud.show(f"VoiceFlow Activo ({self.config.hotkey_dictation})", state=AppState.INJECTING)
+        self.root.after(2500, self.hud.hide)
+
     def toggle_dictation(self) -> None:
         """Toggle recording state on Alt+Space press."""
         if self._is_shutting_down:

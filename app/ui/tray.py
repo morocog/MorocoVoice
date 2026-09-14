@@ -19,20 +19,21 @@ logger = get_logger("tray")
 
 
 def create_tray_icon_image() -> Image.Image:
-    """Procedurally create an attractive 64x64 RGBA system tray icon in memory."""
+    """Procedurally create a high-contrast vibrant 64x64 RGBA system tray icon."""
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
 
-    # Outer circle background
-    draw.ellipse([4, 4, 60, 60], fill="#1e1e24", outline="#3284c6", width=3)
+    # Vibrant Telat Blue solid badge background
+    draw.ellipse([2, 2, 62, 62], fill="#3284C6", outline="#FECA66", width=2)
 
-    # Microphone capsule shape
-    draw.rounded_rectangle([26, 16, 38, 38], radius=6, fill="#3284c6")
+    # Crisp white microphone capsule shape
+    draw.rounded_rectangle([25, 14, 39, 36], radius=7, fill="#FFFFFF")
 
-    # Microphone stand
-    draw.arc([20, 24, 44, 42], start=0, end=180, fill="#ffffff", width=3)
-    draw.line([32, 42, 32, 50], fill="#ffffff", width=3)
-    draw.line([24, 50, 40, 50], fill="#ffffff", width=3)
+    # Microphone arc / holder in pure white
+    draw.arc([18, 22, 46, 42], start=0, end=180, fill="#FFFFFF", width=4)
+    # Microphone stem & base in pure white
+    draw.line([32, 42, 32, 52], fill="#FFFFFF", width=4)
+    draw.line([22, 52, 42, 52], fill="#FFFFFF", width=4)
 
     return img
 
@@ -80,6 +81,20 @@ class SystemTrayManager:
         self._thread = threading.Thread(target=self.icon.run, daemon=True, name="TrayThread")
         self._thread.start()
         logger.info("System tray icon started in daemon thread.")
+
+        def _send_welcome_toast() -> None:
+            import time
+            time.sleep(1.0)
+            if self.icon:
+                try:
+                    self.icon.notify(
+                        title="VoiceFlow-Win Activo 🎙️",
+                        message="Presiona Ctrl+Alt+Space para dictar o clic derecho para Configuración.",
+                    )
+                except Exception:
+                    pass
+
+        threading.Thread(target=_send_welcome_toast, daemon=True, name="WelcomeToast").start()
 
     def _get_engine_label(self, item: pystray.MenuItem) -> str:
         return f"Motor: {self.engine_type.value}"
