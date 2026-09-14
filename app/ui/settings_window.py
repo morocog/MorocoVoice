@@ -193,6 +193,17 @@ class SettingsModal:
             help_text="Retardo seguro post-pegado (default: 80)",
         )
 
+        # Bottom status notice bar
+        status_bar = tk.Frame(self.window, bg="#1e1e24")
+        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        tk.Label(
+            status_bar,
+            text="🟢 VoiceFlow-Win está activo en segundo plano. Dictado listo con: " + self.var_dictation.get(),
+            font=("Segoe UI", 8, "bold"),
+            fg="#10b981",
+            bg="#1e1e24",
+        ).pack(side=tk.LEFT, padx=16, pady=5)
+
         # Bottom action buttons bar
         btn_bar = tk.Frame(self.window, bg="#27272a", height=50)
         btn_bar.pack(fill=tk.X, side=tk.BOTTOM)
@@ -214,7 +225,7 @@ class SettingsModal:
 
         btn_cancel = tk.Button(
             btn_bar,
-            text="Cancelar (Esc)",
+            text="Minimizar a la Bandeja (Esc)",
             font=("Segoe UI", 9),
             bg="#3f3f46",
             fg="#FBFBFD",

@@ -330,6 +330,8 @@ def main() -> None:
         sys.exit(0)
 
     app.start()
+    # Show settings modal on initial launch for immediate visual feedback and confirmation
+    app.open_settings()
     try:
         root.mainloop()
     except KeyboardInterrupt:
