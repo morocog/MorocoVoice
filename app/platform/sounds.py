@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import math
 import struct
+import threading
 import winsound
 
 from app.logging_setup import get_logger
@@ -85,21 +86,23 @@ except Exception as e:
     _POP_BYTES = None
 
 
-def play_sound_blip() -> None:
-    """Play start-of-recording auditory cue asynchronously."""
-    if _BLIP_BYTES is None:
+def _play_memory_sound(wav_bytes: bytes | None) -> None:
+    """Worker to play in-memory WAV synchronously inside a dedicated daemon thread."""
+    if wav_bytes is None:
         return
     try:
-        winsound.PlaySound(_BLIP_BYTES, winsound.SND_MEMORY | winsound.SND_ASYNC)
+        winsound.PlaySound(wav_bytes, winsound.SND_MEMORY | winsound.SND_NODEFAULT)
     except Exception as e:
-        logger.warning("winsound PlaySound blip error: %s", e)
+        logger.warning("winsound PlaySound error: %s", e)
+
+
+def play_sound_blip() -> None:
+    """Play start-of-recording auditory cue in background thread."""
+    if _BLIP_BYTES is not None:
+        threading.Thread(target=_play_memory_sound, args=(_BLIP_BYTES,), daemon=True).start()
 
 
 def play_sound_pop() -> None:
-    """Play end-of-recording auditory cue asynchronously."""
-    if _POP_BYTES is None:
-        return
-    try:
-        winsound.PlaySound(_POP_BYTES, winsound.SND_MEMORY | winsound.SND_ASYNC)
-    except Exception as e:
-        logger.warning("winsound PlaySound pop error: %s", e)
+    """Play end-of-recording auditory cue in background thread."""
+    if _POP_BYTES is not None:
+        threading.Thread(target=_play_memory_sound, args=(_POP_BYTES,), daemon=True).start()

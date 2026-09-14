@@ -44,11 +44,13 @@ class SystemTrayManager:
         self,
         root: tk.Tk,
         on_shutdown: Callable[[], None],
+        on_open_settings: Callable[[], None] | None = None,
         engine_type: AudioEngineType = AudioEngineType.CLOUD,
         vad_mode: VADMode = VADMode.SILERO,
     ) -> None:
         self.root = root
         self.on_shutdown = on_shutdown
+        self.on_open_settings = on_open_settings
         self.engine_type = engine_type
         self.vad_mode = vad_mode
 
@@ -63,6 +65,7 @@ class SystemTrayManager:
             pystray.MenuItem(self._get_engine_label, None, enabled=False),
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
+            pystray.MenuItem("⚙️ Configuración...", self._on_settings_clicked),
             pystray.MenuItem("Abrir Logs (Ctrl+Shift+D)", self._on_open_logs),
             pystray.MenuItem("Salir (Ctrl+Shift+Q)", self._on_exit_clicked),
         )
@@ -92,6 +95,10 @@ class SystemTrayManager:
         self.vad_mode = vad
         if self.icon:
             self.icon.update_menu()
+
+    def _on_settings_clicked(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        if self.on_open_settings:
+            self.root.after(0, self.on_open_settings)
 
     def _on_open_logs(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
         open_log_in_notepad()

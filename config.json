@@ -1,5 +1,5 @@
 {
-  "hotkey_dictation": "alt+space",
+  "hotkey_dictation": "ctrl+alt+space",
   "hotkey_rewrite": "ctrl+shift+space",
   "hotkey_shutdown": "ctrl+shift+q",
   "hotkey_diagnostics": "ctrl+shift+d",

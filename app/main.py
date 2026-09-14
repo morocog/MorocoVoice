@@ -37,6 +37,7 @@ from app.platform.hotkey import HotkeyListener
 from app.platform.injector import emergency_restore, inject_text
 from app.platform.sounds import play_sound_blip, play_sound_pop
 from app.ui.hud import FloatingHUD
+from app.ui.settings_window import SettingsModal
 from app.ui.tray import SystemTrayManager
 
 logger = setup_logging()
@@ -70,18 +71,47 @@ class VoiceFlowApplication:
         )
         self.engine_mgr = EngineManager(config)
         self.rewriter = SemanticRewriter(config)
+        self.settings_modal = SettingsModal(
+            parent=self.root,
+            current_config=self.config,
+            config_file_path="config.json",
+            on_saved=self.reload_config,
+        )
         self.tray = SystemTrayManager(
             root=self.root,
             on_shutdown=self.shutdown_ordered,
+            on_open_settings=self.open_settings,
             engine_type=config.engine,
             vad_mode=self.vad.get_mode(),
         )
         self.hotkeys = HotkeyListener(
+            hotkey_dictation=config.hotkey_dictation,
+            hotkey_rewrite=config.hotkey_rewrite,
+            hotkey_shutdown=config.hotkey_shutdown,
+            hotkey_diagnostics=config.hotkey_diagnostics,
             on_dictate_toggle=self.toggle_dictation,
             on_rewrite_trigger=self.trigger_rewrite,
             on_shutdown_trigger=self.shutdown_ordered,
             on_diagnostics_trigger=self.trigger_diagnostics,
         )
+
+    def open_settings(self) -> None:
+        """Display the visual settings modal."""
+        self.settings_modal.show()
+
+    def reload_config(self, new_config: AppConfig) -> None:
+        """Live hot reload of runtime configuration without restarting."""
+        self.config = new_config
+        self.hotkeys.update_shortcuts(
+            dictation=new_config.hotkey_dictation,
+            rewrite=new_config.hotkey_rewrite,
+            shutdown=new_config.hotkey_shutdown,
+            diagnostics=new_config.hotkey_diagnostics,
+        )
+        self.engine_mgr = EngineManager(new_config)
+        self.rewriter = SemanticRewriter(new_config)
+        self.tray.update_status(new_config.engine, self.vad.get_mode())
+        logger.info("Configuration hot-reloaded successfully in live runtime.")
 
     def enforce_single_instance(self) -> bool:
         """Enforce single instance execution via Win32 Named Mutex."""
