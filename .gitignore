@@ -1,0 +1,27 @@
+# Python & Virtual Environments
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+
+# IDE & OS
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
+
+# VoiceFlow Runtime & Models
+app/audio/models/*.onnx
+app/audio/models/*.tmp
+voiceflow.log
+voiceflow.log.*
+.env
+
+# Pytest & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
