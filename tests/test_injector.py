@@ -35,3 +35,22 @@ def test_emergency_restore_safeguard():
     emergency_restore()
     # Should complete without throwing exceptions
     assert True
+
+
+def test_clipboard_lock_reentrancy():
+    """Verify _clipboard_lock is reentrant (RLock) to prevent deadlocks on exception recovery."""
+    from app.platform.injector import _clipboard_lock
+
+    with _clipboard_lock:
+        # Calling emergency_restore while holding lock MUST NOT deadlock
+        emergency_restore()
+    assert True
+
+
+def test_release_modifiers_executes_safely():
+    """Verify release_modifiers executes without raising Win32 exceptions."""
+    from app.platform.injector import release_modifiers
+
+    release_modifiers()
+    assert True
+

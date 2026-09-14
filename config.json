@@ -11,7 +11,7 @@
   "ollama_url": "http://localhost:11434",
   "ollama_model": "qwen2.5:1.5b",
   "max_recording_seconds": 60,
-  "clipboard_restore_delay_ms": 80,
+  "clipboard_restore_delay_ms": 120,
   "sample_rate": 16000,
   "hud_bottom_margin_px": 60,
   "custom_vocabulary_path": "custom_vocabulary.json",

@@ -153,7 +153,7 @@ class SemanticRewriter:
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=1024,
+                    max_tokens=300,
                 )
                 choice = resp.choices[0].message.content
                 return choice.strip() if choice else None

@@ -192,44 +192,55 @@ class VoiceFlowApplication:
                 self.root.after(0, self.hud.hide)
                 return
 
-            # Step 1: STT
             try:
-                transcription = self.engine_mgr.transcribe(audio_buffer)
-            except Exception as e:
-                logger.error("Transcription error in worker: %s", e)
-                self._dispatch_hud(AppState.ERROR, "Error en Transcripción")
-                self.root.after(2000, self.hud.hide)
-                return
-
-            # Check if canceled by newer job
-            with self._worker_lock:
-                if current_job != self._active_job_id:
-                    logger.info("Discarding stale job %d in favor of newer request.", current_job)
+                # Step 1: STT
+                try:
+                    transcription = self.engine_mgr.transcribe(audio_buffer)
+                except Exception as e:
+                    logger.error("Transcription error in worker: %s", e)
+                    self._dispatch_hud(AppState.ERROR, "Error en Transcripción")
+                    self.root.after(2000, self.hud.hide)
                     return
 
-            raw_text = transcription.text.strip()
-            if not raw_text:
-                logger.info("No speech detected or output suppressed by hallucination filter.")
+                # Check if canceled by newer job
+                with self._worker_lock:
+                    if current_job != self._active_job_id:
+                        logger.info("Discarding stale job %d in favor of newer request.", current_job)
+                        self.root.after(0, self.hud.hide)
+                        return
+
+                raw_text = transcription.text.strip()
+                if not raw_text:
+                    logger.info("No speech detected or output suppressed by hallucination filter.")
+                    self.root.after(0, self.hud.hide)
+                    return
+
+                # Step 2: Contextual Semantic Refinement with graceful raw fallback
+                app_name, _, _ = get_foreground_app_info()
+                try:
+                    refined_text = self.rewriter.refine_dictation(raw_text, app_name)
+                except Exception as e:
+                    logger.warning("Refinement failed, falling back to raw transcript: %s", e)
+                    refined_text = raw_text
+
+                # Step 3: Injection
+                self._dispatch_hud(AppState.INJECTING, "Escribiendo...")
+                try:
+                    inject_text(refined_text, restore_delay_ms=self.config.clipboard_restore_delay_ms)
+                except Exception as e:
+                    logger.error("Injection error: %s", e)
+                    self._dispatch_hud(AppState.ERROR, "Error al Inyectar")
+                    self.root.after(2000, self.hud.hide)
+                    return
+
+                # Complete and hide HUD
+                time.sleep(0.4)
                 self.root.after(0, self.hud.hide)
-                return
 
-            # Step 2: Contextual Semantic Refinement
-            app_name, _, _ = get_foreground_app_info()
-            refined_text = self.rewriter.refine_dictation(raw_text, app_name)
-
-            # Step 3: Injection
-            self._dispatch_hud(AppState.INJECTING, "Escribiendo...")
-            try:
-                inject_text(refined_text, restore_delay_ms=self.config.clipboard_restore_delay_ms)
-            except Exception as e:
-                logger.error("Injection error: %s", e)
-                self._dispatch_hud(AppState.ERROR, "Error al Inyectar")
+            except Exception as unhandled_e:
+                logger.error("Unhandled error in AudioWorker: %s", unhandled_e, exc_info=True)
+                self._dispatch_hud(AppState.ERROR, "Error Inesperado")
                 self.root.after(2000, self.hud.hide)
-                return
-
-            # Complete and hide HUD
-            time.sleep(0.4)
-            self.root.after(0, self.hud.hide)
 
         threading.Thread(target=_worker, daemon=True, name="AudioWorker").start()
 
@@ -253,14 +264,19 @@ class VoiceFlowApplication:
         self._dispatch_hud(AppState.PROCESSING, "Reescribiendo...")
 
         def _rewrite_worker() -> None:
-            res = self.rewriter.rewrite_selection(selected_text, app_name)
-            if res.success and res.rewritten_text:
-                self._dispatch_hud(AppState.INJECTING, "Reemplazando...")
-                play_sound_pop()
-                inject_text(res.rewritten_text, restore_delay_ms=self.config.clipboard_restore_delay_ms)
-                time.sleep(0.4)
-                self.root.after(0, self.hud.hide)
-            else:
+            try:
+                res = self.rewriter.rewrite_selection(selected_text, app_name)
+                if res.success and res.rewritten_text:
+                    self._dispatch_hud(AppState.INJECTING, "Reemplazando...")
+                    play_sound_pop()
+                    inject_text(res.rewritten_text, restore_delay_ms=self.config.clipboard_restore_delay_ms)
+                    time.sleep(0.4)
+                    self.root.after(0, self.hud.hide)
+                else:
+                    self._dispatch_hud(AppState.ERROR, "Error al Reescribir")
+                    self.root.after(2000, self.hud.hide)
+            except Exception as e:
+                logger.error("Unhandled error in RewriteWorker: %s", e, exc_info=True)
                 self._dispatch_hud(AppState.ERROR, "Error al Reescribir")
                 self.root.after(2000, self.hud.hide)
 

@@ -18,7 +18,11 @@ from app.logging_setup import get_logger
 logger = get_logger("injector")
 
 # Win32 Constants
+VK_SHIFT = 0x10
 VK_CONTROL = 0x11
+VK_MENU = 0x12
+VK_LWIN = 0x5B
+VK_RWIN = 0x5C
 VK_V = 0x56
 KEYEVENTF_KEYUP = 0x0002
 INPUT_KEYBOARD = 1
@@ -72,84 +76,144 @@ class INPUT(ctypes.Structure):
     ]
 
 
-# Global state for emergency clipboard restore
+# Global state for emergency clipboard restore with reentrant lock to prevent deadlocks
 _active_backup_text: str | None = None
 _injected_expected_text: str | None = None
-_clipboard_lock = threading.Lock()
+_clipboard_lock = threading.RLock()
+
+
+try:
+    import win32clipboard as wcb
+    import win32con
+    _HAS_PYWIN32_CLIP = True
+except Exception:
+    _HAS_PYWIN32_CLIP = False
 
 
 def get_clipboard_text() -> str:
-    """Retrieve current text content from the Win32 clipboard."""
-    if not ctypes.windll.user32.OpenClipboard(None):
+    """Retrieve current text content from clipboard with retry loop and 64-bit safety."""
+    if _HAS_PYWIN32_CLIP:
+        for _ in range(6):
+            try:
+                wcb.OpenClipboard()
+                try:
+                    if wcb.IsClipboardFormatAvailable(win32con.CF_UNICODETEXT):
+                        val = wcb.GetClipboardData(win32con.CF_UNICODETEXT)
+                        return val or ""
+                    return ""
+                finally:
+                    wcb.CloseClipboard()
+            except Exception:
+                time.sleep(0.015)
         return ""
-    try:
-        # CF_UNICODETEXT = 13
-        h_glb = ctypes.windll.user32.GetClipboardData(13)
-        if not h_glb:
-            return ""
-        ptr = ctypes.windll.kernel32.GlobalLock(h_glb)
-        if not ptr:
-            return ""
-        try:
-            return ctypes.c_wchar_p(ptr).value or ""
-        finally:
-            ctypes.windll.kernel32.GlobalUnlock(h_glb)
-    finally:
-        ctypes.windll.user32.CloseClipboard()
+
+    # 64-bit ctypes fallback
+    for _ in range(6):
+        if ctypes.windll.user32.OpenClipboard(None):
+            try:
+                ctypes.windll.user32.GetClipboardData.restype = ctypes.c_void_p
+                h_glb = ctypes.windll.user32.GetClipboardData(13)
+                if not h_glb:
+                    return ""
+                ctypes.windll.kernel32.GlobalLock.restype = ctypes.c_void_p
+                ptr = ctypes.windll.kernel32.GlobalLock(h_glb)
+                if not ptr:
+                    return ""
+                try:
+                    return ctypes.c_wchar_p(ptr).value or ""
+                finally:
+                    ctypes.windll.kernel32.GlobalUnlock(h_glb)
+            finally:
+                ctypes.windll.user32.CloseClipboard()
+        time.sleep(0.015)
+    return ""
 
 
 def set_clipboard_text(text: str) -> bool:
-    """Set text content into the Win32 clipboard."""
-    if not ctypes.windll.user32.OpenClipboard(None):
+    """Set text content into clipboard with retry loop and 64-bit safety."""
+    if _HAS_PYWIN32_CLIP:
+        for _ in range(6):
+            try:
+                wcb.OpenClipboard()
+                try:
+                    wcb.EmptyClipboard()
+                    wcb.SetClipboardText(text, win32con.CF_UNICODETEXT)
+                    return True
+                finally:
+                    wcb.CloseClipboard()
+            except Exception:
+                time.sleep(0.015)
         return False
-    try:
-        ctypes.windll.user32.EmptyClipboard()
-        # GMEM_MOVEABLE = 0x0002
-        buffer = (text + "\0").encode("utf-16-le")
-        h_glb = ctypes.windll.kernel32.GlobalAlloc(0x0002, len(buffer))
-        if not h_glb:
-            return False
-        ptr = ctypes.windll.kernel32.GlobalLock(h_glb)
-        if not ptr:
-            ctypes.windll.kernel32.GlobalFree(h_glb)
-            return False
-        try:
-            ctypes.memmove(ptr, buffer, len(buffer))
-        finally:
-            ctypes.windll.kernel32.GlobalUnlock(h_glb)
-        # CF_UNICODETEXT = 13
-        res = ctypes.windll.user32.SetClipboardData(13, h_glb)
-        return bool(res)
-    finally:
-        ctypes.windll.user32.CloseClipboard()
+
+    # 64-bit ctypes fallback with explicit pointer types
+    for _ in range(6):
+        if ctypes.windll.user32.OpenClipboard(None):
+            try:
+                ctypes.windll.user32.EmptyClipboard()
+                buffer = (text + "\0").encode("utf-16-le")
+                ctypes.windll.kernel32.GlobalAlloc.restype = ctypes.c_void_p
+                h_glb = ctypes.windll.kernel32.GlobalAlloc(0x0002, len(buffer))
+                if not h_glb:
+                    return False
+                ctypes.windll.kernel32.GlobalLock.restype = ctypes.c_void_p
+                ptr = ctypes.windll.kernel32.GlobalLock(h_glb)
+                if not ptr:
+                    ctypes.windll.kernel32.GlobalFree(h_glb)
+                    return False
+                try:
+                    ctypes.memmove(ptr, buffer, len(buffer))
+                finally:
+                    ctypes.windll.kernel32.GlobalUnlock(h_glb)
+                ctypes.windll.user32.SetClipboardData.restype = ctypes.c_void_p
+                res = ctypes.windll.user32.SetClipboardData(13, h_glb)
+                return bool(res)
+            finally:
+                ctypes.windll.user32.CloseClipboard()
+        time.sleep(0.015)
+    return False
+
+
+def release_modifiers() -> None:
+    """Release physical modifier keys (Alt, Win, Shift, Ctrl) to prevent combination conflicts."""
+    mods = [VK_MENU, VK_LWIN, VK_RWIN, VK_SHIFT]
+    cb_size = ctypes.sizeof(INPUT)
+    inputs = (INPUT * len(mods))()
+    for i, vk in enumerate(mods):
+        inputs[i].type = INPUT_KEYBOARD
+        inputs[i].union.ki = KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP, 0, 0)
+    ctypes.windll.user32.SendInput(len(mods), ctypes.byref(inputs), cb_size)
+    time.sleep(0.02)
 
 
 def send_ctrl_v() -> None:
-    """Synthesize Ctrl+V keydown/keyup events using Win32 SendInput."""
-    # 4 inputs: Ctrl Down, V Down, V Up, Ctrl Up
-    inputs = (INPUT * 4)()
+    """Synthesize Ctrl+V keydown/keyup events using staged Win32 SendInput."""
+    # Ensure no lingering modifiers (Alt/Win/Shift) warp Ctrl+V into Win+Ctrl+V or Alt+Ctrl+V
+    release_modifiers()
 
-    # Ctrl down
-    inputs[0].type = INPUT_KEYBOARD
-    inputs[0].union.ki = KEYBDINPUT(VK_CONTROL, 0, 0, 0, 0)
-
-    # V down
-    inputs[1].type = INPUT_KEYBOARD
-    inputs[1].union.ki = KEYBDINPUT(VK_V, 0, 0, 0, 0)
-
-    # V up
-    inputs[2].type = INPUT_KEYBOARD
-    inputs[2].union.ki = KEYBDINPUT(VK_V, 0, KEYEVENTF_KEYUP, 0, 0)
-
-    # Ctrl up
-    inputs[3].type = INPUT_KEYBOARD
-    inputs[3].union.ki = KEYBDINPUT(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0, 0)
-
-    # # VERIFY: sizeof(INPUT) is 40 bytes on x64, cbSize must match struct byte footprint
     cb_size = ctypes.sizeof(INPUT)
-    sent = ctypes.windll.user32.SendInput(4, ctypes.byref(inputs), cb_size)
-    if sent != 4:
-        logger.warning("SendInput returned %d / 4 events sent.", sent)
+
+    # 1. Ctrl Down
+    down_ctrl = (INPUT * 1)()
+    down_ctrl[0].type = INPUT_KEYBOARD
+    down_ctrl[0].union.ki = KEYBDINPUT(VK_CONTROL, 0, 0, 0, 0)
+    ctypes.windll.user32.SendInput(1, ctypes.byref(down_ctrl), cb_size)
+    time.sleep(0.015)
+
+    # 2. V Down and V Up
+    press_v = (INPUT * 2)()
+    press_v[0].type = INPUT_KEYBOARD
+    press_v[0].union.ki = KEYBDINPUT(VK_V, 0, 0, 0, 0)
+    press_v[1].type = INPUT_KEYBOARD
+    press_v[1].union.ki = KEYBDINPUT(VK_V, 0, KEYEVENTF_KEYUP, 0, 0)
+    ctypes.windll.user32.SendInput(2, ctypes.byref(press_v), cb_size)
+    time.sleep(0.015)
+
+    # 3. Ctrl Up
+    up_ctrl = (INPUT * 1)()
+    up_ctrl[0].type = INPUT_KEYBOARD
+    up_ctrl[0].union.ki = KEYBDINPUT(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0, 0)
+    ctypes.windll.user32.SendInput(1, ctypes.byref(up_ctrl), cb_size)
+    time.sleep(0.02)
 
 
 def emergency_restore() -> None:
