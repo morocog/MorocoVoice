@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import tkinter as tk
+import webbrowser
 from collections.abc import Callable
 from pathlib import Path
 from tkinter import messagebox, ttk
@@ -123,7 +124,7 @@ class SettingsModal:
 
         subtitle_lbl = tk.Label(
             banner,
-            text="v3.5.0",
+            text="v1.0.0",
             font=("Segoe UI", 9, "bold"),
             fg="#FECA66",
             bg="#27272a",
@@ -190,6 +191,24 @@ class SettingsModal:
             var=self.var_groq_api_key,
             help_text="Clave de API enmascarada (almacenada segura en .env)",
         )
+
+        # 1-Click direct browser helper for zero-friction key acquisition
+        groq_link_row = tk.Frame(content, bg="#18181b")
+        groq_link_row.pack(fill=tk.X, pady=(0, 4))
+        tk.Label(groq_link_row, text="", bg="#18181b", width=20).pack(side=tk.LEFT)
+        btn_get_key = tk.Button(
+            groq_link_row,
+            text="🔑 Obtener clave gratuita en console.groq.com (1 clic)",
+            font=("Segoe UI", 8, "underline"),
+            fg="#3284C6",
+            bg="#18181b",
+            activeforeground="#FECA66",
+            activebackground="#18181b",
+            relief=tk.FLAT,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://console.groq.com/keys"),
+        )
+        btn_get_key.pack(side=tk.LEFT)
         self._create_entry_row(
             content,
             label="Modelo STT Groq:",

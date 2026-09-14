@@ -64,7 +64,7 @@ class SystemTrayManager:
         """Launch the system tray icon loop inside a daemon thread."""
         image = create_tray_icon_image()
         menu = pystray.Menu(
-            pystray.MenuItem("MorocoVoice v3.5.0", None, enabled=False),
+            pystray.MenuItem("MorocoVoice v1.0.0", None, enabled=False),
             pystray.MenuItem(self._get_engine_label, None, enabled=False),
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,

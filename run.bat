@@ -5,7 +5,7 @@ title MorocoVoice Launcher
 cd /d "%~dp0"
 
 echo ======================================================
-echo             MorocoVoice v3.5.0
+echo             MorocoVoice v1.0.0
 echo   Suite de Dictado y Reescritura por Voz en Windows
 echo ======================================================
 echo.

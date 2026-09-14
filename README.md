@@ -2,6 +2,7 @@
 
 <div align="center">
 
+![Version](https://img.shields.io/badge/Version-v1.0.0-22c55e?style=for-the-badge)
 ![Windows 10/11](https://img.shields.io/badge/OS-Windows%2010%20%7C%2011%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Python 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Zero PyTorch](https://img.shields.io/badge/Architecture-Zero%20PyTorch%20(%3C450MB)-10b981?style=for-the-badge)
@@ -54,9 +55,10 @@ Haz doble clic sobre el archivo **`run.bat`**.
 
 ### 3. Configura tu Clave de Groq (Gratuita)
 1. Al arrancar por primera vez, se abrirá la ventana de **Configuración de MorocoVoice**.
-2. Obtén tu clave API gratuita en [console.groq.com/keys](https://console.groq.com/keys).
-3. Pégala en el campo **Groq API Key**. Verás que la clave se enmascara automáticamente con asteriscos (`••••••••••••`) para protegerla de miradas indiscretas o transmisiones de pantalla.
-4. Haz clic en **💾 Guardar y Aplicar**. ¡Listo!
+2. Haz clic en el botón **🔑 Obtener clave gratuita en console.groq.com (1 clic)** que aparece justo debajo del campo de la clave — te llevará directamente a la página en tu navegador.
+3. Crea tu cuenta gratuita en Groq, genera tu API Key y cópiala.
+4. Pégala en el campo **Groq API Key**. Verás que la clave se enmascara automáticamente con asteriscos (`••••••••••••`) para protegerla de miradas indiscretas o transmisiones de pantalla.
+5. Haz clic en **💾 Guardar y Aplicar**. ¡Listo!
 
 ---
 
@@ -107,7 +109,7 @@ MorocoVoice/
 │   ├── ui/                 # HUD flotante, Bandeja de sistema y Configuración
 │   ├── contracts.py        # Esquemas de configuración inmutables
 │   └── main.py             # Orquestador principal y mutex de instancia única
-├── tests/                  # Suite de pruebas unitarias (24+ tests)
+├── tests/                  # Suite de pruebas unitarias (26 tests)
 ├── .env.example            # Plantilla de variables de entorno
 ├── config.json             # Ajustes de usuario sincronizados
 ├── custom_vocabulary.json  # Vocabulario especializado (jerga técnica, nombres)
