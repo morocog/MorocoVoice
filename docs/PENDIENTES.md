@@ -11,7 +11,7 @@
 > 💡 **Validación Rápida con 1 Clic en Obsidian:** Haz clic directamente sobre la casilla `[ ]` para marcarla como `[x]` una vez probada en producción.
 
 - [x] **[BUG BLOQUEANTE #1]** Cambiar `config.json` línea 6: modelo LLM `llama-3.1-8b-instant` reemplazó al inexistente qwen. *(Resuelto v1.0.1)*
-- [ ] **[BUG BLOQUEANTE #2]** Re-publicar `v1.0.1` desde `main` con nuevo tag `v1.0.1`.
+- [x] **[BUG BLOQUEANTE #2]** Publicada la versión `v1.0.1` desde `main` con nuevo tag anotado `v1.0.1`. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #3]** `logging_setup.py:90` namespace `"morocovoice.{name}"` corregido, filtro PII y rotación activa. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #4]** Python 3.11+ unificado en `pyproject.toml`, badge, README y `run.bat` con validación estricta al arranque. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #5]** Placeholder de `.env` (`gsk_tu_clave_de_groq_aqui`) detectado y filtrado tanto en carga como en `settings_window.py` con advertencia al usuario. *(Resuelto v1.0.1)*
