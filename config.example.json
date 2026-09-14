@@ -13,6 +13,7 @@
   "sample_rate": 16000,
   "hud_bottom_margin_px": 60,
   "custom_vocabulary_path": "custom_vocabulary.json",
+  "stt_language": "es",
   "silence_threshold_seconds": 1.2,
   "energy_rms_threshold": 0.015
 }

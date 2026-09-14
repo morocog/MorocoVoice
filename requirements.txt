@@ -1,4 +1,4 @@
-# VoiceFlow-Win: Industrial Dependencies (No PyTorch)
+# MorocoVoice: Industrial Dependencies (Zero PyTorch)
 # Core Audio & Inference
 numpy>=1.24.0,<2.0.0
 onnxruntime>=1.16.0
@@ -13,4 +13,6 @@ pywin32>=306
 
 # Cloud & LLM Integration
 groq>=0.9.0
-requests>=2.31.0
+
+# Testing
+pytest>=8.0.0

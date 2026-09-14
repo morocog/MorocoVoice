@@ -84,6 +84,7 @@ class FloatingHUD:
         """Construct borderless, topmost Tkinter window and configure Win32 styles."""
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
+        self.root.attributes("-alpha", 0.92)
         self.root.configure(bg="#18181b")
 
         # Frame container with modern capsule look & drag cursor
@@ -106,7 +107,7 @@ class FloatingHUD:
         # Status label
         self.label = tk.Label(
             self.frame,
-            text="VoiceFlow",
+            text="MorocoVoice",
             font=("Segoe UI", 9, "bold"),
             fg="#f4f4f5",
             bg="#27272a",

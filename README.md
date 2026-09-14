@@ -2,11 +2,11 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-v1.0.0-22c55e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.0.1-22c55e?style=for-the-badge)
 ![Windows 10/11](https://img.shields.io/badge/OS-Windows%2010%20%7C%2011%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
-![Python 3.10+](https://img.shields.io/badge/Python-3.10%20%7C%203.11-3776AB?style=for-the-badge&logo=python&logoColor=white)
+![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Zero PyTorch](https://img.shields.io/badge/Architecture-Zero%20PyTorch%20(%3C450MB)-10b981?style=for-the-badge)
-![Groq In-Cloud](https://img.shields.io/badge/STT%20Latency-~400ms%20(Groq%20Cloud)-f97316?style=for-the-badge)
+![Latencia Pipeline](https://img.shields.io/badge/Latencia-~1.2s%20(Pipeline%20Completo)-f97316?style=for-the-badge)
 ![License MIT](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
 **La suite de dictado por voz y reescritura contextual para Windows con paridad frente a Wispr Flow, costo $0 y arquitectura ultraligera.**
@@ -27,7 +27,7 @@ Herramientas comerciales populares como **Wispr Flow** o **Superwhisper** cobran
 | :--- | :---: | :---: | :---: |
 | **Costo** | **$0 USD (Código Abierto)** | $12 – $15 / mes ($144+/año) | $8 – $20 / mes |
 | **Plataforma Principal** | **Windows 10/11 x64 Nativo** | Mac / Windows | Prioridad Mac |
-| **Latencia STT** | **~400 ms** (Groq LPU Turbo) | ~500 – 800 ms | ~800 – 1500 ms |
+| **Latencia STT** | **~400 ms API / ~1.2s Total** | ~500 – 800 ms | ~800 – 1500 ms |
 | **Reescritura Contextual** | **Sí (Automática según ventana)** | Sí (Planes superiores) | Sí |
 | **Huella en Disco (RAM)** | **< 450 MB (Zero PyTorch)** | ~1.5 GB | ~850 MB |
 | **Modo Local Offline** | **Sí (`faster-whisper` int8)** | No (100% dependiente de nube) | Sí |
@@ -38,9 +38,11 @@ Herramientas comerciales populares como **Wispr Flow** o **Superwhisper** cobran
 
 ## 🚀 Comenzar en 3 Pasos (Instalador Zero-Touch)
 
-No necesitas compilar modelos pesados ni pelear con comandos de terminal:
+No necesitas compilar modelos pesados ni conocimientos técnicos:
 
-### 1. Clonar el Repositorio
+### 1. Descargar o Clonar el Repositorio
+- **Opción A (Directa, sin Git):** Haz clic en el botón verde **Code ➔ Download ZIP** arriba en GitHub y descomprime la carpeta en tu equipo.
+- **Opción B (Con terminal Git):**
 ```cmd
 git clone https://github.com/morocog/MorocoVoice.git
 cd MorocoVoice
@@ -49,16 +51,22 @@ cd MorocoVoice
 ### 2. Doble Clic en `run.bat`
 Haz doble clic sobre el archivo **`run.bat`**.
 - El lanzador inteligente detectará si es tu primera ejecución.
+- Verificará que cuentes con **Python 3.11 o superior**.
 - Creará automáticamente el entorno virtual aislado (`.venv`).
 - Instalará todas las dependencias industriales optimizadas (`onnxruntime`, `faster-whisper`, `groq`, `pystray`, `pywin32`).
 - Inicializará **MorocoVoice** y lo dejará listo junto al reloj de Windows.
 
 ### 3. Configura tu Clave de Groq (Gratuita)
 1. Al arrancar por primera vez, se abrirá la ventana de **Configuración de MorocoVoice**.
-2. Haz clic en el botón **🔑 Obtener clave gratuita en console.groq.com (1 clic)** que aparece justo debajo del campo de la clave — te llevará directamente a la página en tu navegador.
+2. Haz clic en el botón **🔑 Obtener clave gratuita en console.groq.com (1 clic)** que aparece en pantalla para abrir la consola de Groq en tu navegador.
 3. Crea tu cuenta gratuita en Groq, genera tu API Key y cópiala.
-4. Pégala en el campo **Groq API Key**. Verás que la clave se enmascara automáticamente con asteriscos (`••••••••••••`) para protegerla de miradas indiscretas o transmisiones de pantalla.
+4. Pégala en el campo **Groq API Key** (se enmascara automáticamente con asteriscos `••••••••••••`).
 5. Haz clic en **💾 Guardar y Aplicar**. ¡Listo!
+
+### 4. (Opcional) Enséñale tus Palabras Técnicas y Jerga
+En la pestaña **📖 Vocabulario Personalizado** dentro de Configuración:
+- Ingresa hasta **30 palabras técnicas, acrónimos o nombres propios** (ej: `GitHub`, `API`, `Python`, `WFM`, o nombres de tus clientes).
+- Whisper y el **corrector determinista con difflib** de MorocoVoice priorizarán estos términos para garantizar transcripciones exactas (evitando errores fonéticos como `GITCOP` en lugar de `GitHub`).
 
 ---
 
@@ -68,10 +76,10 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 
 | Atajo | Función | Modo de Uso |
 | :--- | :--- | :--- |
-| **`Win + Space`** | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa en ~400 ms. |
+| **`Win + Space`** | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
 
-> 💡 *Para ver los registros de depuración o cerrar la aplicación de forma limpia, simplemente haz clic derecho en el icono de MorocoVoice en la bandeja del sistema (junto al reloj de Windows).*
+> 💡 *Para abrir Configuración, ver los registros de depuración o cerrar la aplicación de forma limpia, simplemente haz clic derecho en el icono de MorocoVoice en la bandeja del sistema (junto al reloj de Windows).*
 
 ---
 
@@ -80,8 +88,8 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 MorocoVoice ofrece arquitectura dual según tus necesidades de conectividad o privacidad:
 
 1. **Modo Cloud (Recomendado - Paridad Wispr Flow):**
-   - Transcripción con `whisper-large-v3-turbo` en Groq Cloud (~400 ms de latencia).
-   - Reescritura semántica contextual con `qwen/qwen3.8-27b` o `llama-3.3-70b-versatile`.
+   - Transcripción con `whisper-large-v3-turbo` en Groq Cloud (~400 ms de latencia API).
+   - Reescritura semántica contextual ultrarrápida con `llama-3.1-8b-instant`.
 2. **Modo Local Offline (Privacidad Absoluta):**
    - Inferencia de voz local en CPU utilizando `faster-whisper` (cuantización `int8`, motor CTranslate2 optimizado con AVX2/AVX512).
    - Fallback semántico local compatible con **Ollama** (`http://localhost:11434`).

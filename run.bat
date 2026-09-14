@@ -5,7 +5,7 @@ title MorocoVoice Launcher
 cd /d "%~dp0"
 
 echo ======================================================
-echo             MorocoVoice v1.0.0
+echo             MorocoVoice v1.0.1
 echo   Suite de Dictado y Reescritura por Voz en Windows
 echo ======================================================
 echo.
@@ -14,30 +14,41 @@ REM 1. Verificacion y Creacion Automatica del Entorno Virtual (Zero-Touch)
 if exist ".venv\Scripts\python.exe" goto :RUN_APP
 
 echo [*] Primer inicio detectado: Configurando entorno para MorocoVoice...
-echo [*] Verificando instalador de Python en el sistema...
+echo [*] Verificando instalador de Python 3.11+ en el sistema...
 
+set "PY_CMD="
 python --version >nul 2>&1
 if not errorlevel 1 (
-    set "PY_CMD=python"
-    goto :CREATE_VENV
+    python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
+    if not errorlevel 1 set "PY_CMD=python"
 )
 
-py -3 --version >nul 2>&1
-if not errorlevel 1 (
-    set "PY_CMD=py -3"
-    goto :CREATE_VENV
+if not defined PY_CMD (
+    py -3.11 --version >nul 2>&1
+    if not errorlevel 1 set "PY_CMD=py -3.11"
 )
 
-echo [ERROR] No se detecto Python instalado en el sistema.
-echo Por favor descarga e instala Python 3.10 o 3.11 desde:
-echo   https://www.python.org/downloads/
-echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalacion.
-echo.
-pause
-exit /b 1
+if not defined PY_CMD (
+    py -3 --version >nul 2>&1
+    if not errorlevel 1 (
+        py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
+        if not errorlevel 1 set "PY_CMD=py -3"
+    )
+)
+
+if not defined PY_CMD (
+    echo [ERROR] No se detecto una instalacion valida de Python 3.11 o superior.
+    echo MorocoVoice requiere Python 3.11+ (con soporte StrEnum y tipado moderno).
+    echo Por favor descarga e instala Python 3.11 o superior desde:
+    echo   https://www.python.org/downloads/
+    echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalacion.
+    echo.
+    pause
+    exit /b 1
+)
 
 :CREATE_VENV
-echo [*] Creando entorno virtual aislado (.venv)...
+echo [*] Creando entorno virtual aislado (.venv) con %PY_CMD%...
 %PY_CMD% -m venv .venv
 if errorlevel 1 (
     echo [ERROR] No se pudo crear el entorno virtual.
@@ -61,6 +72,14 @@ if not exist ".env" (
         echo [*] Archivo de configuracion .env generado desde plantilla.
     )
 )
+
+if not exist "config.json" (
+    if exist "config.example.json" (
+        copy config.example.json config.json >nul
+        echo [*] Archivo config.json generado desde plantilla.
+    )
+)
+
 echo [*] Entorno de MorocoVoice inicializado con exito!
 echo.
 

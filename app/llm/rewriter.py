@@ -145,7 +145,11 @@ class SemanticRewriter:
         if self.groq_api_key:
             try:
                 if self._groq_client is None:
-                    self._groq_client = Groq(api_key=self.groq_api_key)
+                    self._groq_client = Groq(api_key=self.groq_api_key, timeout=15.0)
+
+                prompt_words = len(user_prompt.split())
+                dynamic_max_tokens = min(2048, max(500, int(prompt_words * 2.5)))
+
                 resp = self._groq_client.chat.completions.create(
                     model=self.groq_model,
                     messages=[
@@ -153,7 +157,7 @@ class SemanticRewriter:
                         {"role": "user", "content": user_prompt},
                     ],
                     temperature=0.2,
-                    max_tokens=300,
+                    max_tokens=dynamic_max_tokens,
                 )
                 choice = resp.choices[0].message.content
                 return choice.strip() if choice else None

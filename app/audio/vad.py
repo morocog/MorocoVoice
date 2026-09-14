@@ -86,7 +86,7 @@ class VoiceActivityDetector:
                 logger.info("Attempting Silero VAD download from %s", url)
                 temp_dest = self.model_path.with_suffix(".tmp")
                 req = urllib.request.Request(
-                    url, headers={"User-Agent": "VoiceFlow-Win-Bootstrap/3.4.1"}
+                    url, headers={"User-Agent": "MorocoVoice-Bootstrap/1.0.1"}
                 )
                 with urllib.request.urlopen(req, timeout=10) as resp, open(temp_dest, "wb") as f:
                     f.write(resp.read())

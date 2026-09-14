@@ -29,14 +29,14 @@ CRITICAL OUTPUT RULES:
 4. Maintain the language of the input (Spanish or English).
 """
 
-DICTATION_SYSTEM_PROMPT = f"""You are VoiceFlow Semantic Formatter.
+DICTATION_SYSTEM_PROMPT = f"""You are MorocoVoice Semantic Formatter.
 Your task is to transform spoken transcriptions into clean, natural, and properly punctuated written text.
 Remove filler sounds and speech disfluencies (e.g., "eh", "este", "umm", "bueno", "o sea", "you know").
 Apply capitalization and punctuation correctly.
 {ANTI_CONVERSATION_GUARDRAIL}
 """
 
-REWRITE_SYSTEM_PROMPT = f"""You are VoiceFlow Contextual Editor.
+REWRITE_SYSTEM_PROMPT = f"""You are MorocoVoice Contextual Editor.
 Your task is to rewrite and polish the user's selected text based on the active application context.
 Fix grammar, spelling, typos, and syntax while preserving the author's original meaning and intent.
 {ANTI_CONVERSATION_GUARDRAIL}

@@ -45,6 +45,8 @@ class AudioRecorder:
         self._lock = threading.Lock()
         self._is_recording = False
         self._start_time = 0.0
+        self._total_chunks_count = 0
+        self._speech_chunks_count = 0
 
     def start(self) -> None:
         """Start non-blocking audio capture stream."""
@@ -54,6 +56,8 @@ class AudioRecorder:
                 return
 
             self._frames.clear()
+            self._total_chunks_count = 0
+            self._speech_chunks_count = 0
             self._is_recording = True
             self._start_time = time.perf_counter()
 
@@ -86,8 +90,18 @@ class AudioRecorder:
             return
 
         chunk = indata[:, 0].copy()
+        is_speech = False
+        if self.vad:
+            try:
+                is_speech = self.vad.is_speech_chunk(chunk)
+            except Exception as e:
+                logger.debug("VAD chunk evaluation error: %s", e)
+
         with self._lock:
             self._frames.append(chunk)
+            self._total_chunks_count += 1
+            if is_speech:
+                self._speech_chunks_count += 1
 
             # Auto cutoff protection (max 60 seconds)
             elapsed = time.perf_counter() - self._start_time
@@ -132,3 +146,11 @@ class AudioRecorder:
             if not self._is_recording:
                 return 0.0
             return time.perf_counter() - self._start_time
+
+    def has_detected_speech(self) -> bool:
+        """Check if any speech chunks were detected by VAD during the session."""
+        with self._lock:
+            if not self.vad:
+                return True
+            return self._speech_chunks_count > 0
+

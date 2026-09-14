@@ -78,7 +78,7 @@ class SystemMetrics:
 @dataclass(frozen=True)
 class AppConfig:
     """Immutable application configuration."""
-    hotkey_dictation: str = "alt+space"
+    hotkey_dictation: str = "win+space"
     hotkey_rewrite: str = "ctrl+shift+space"
     hotkey_shutdown: str = ""
     hotkey_diagnostics: str = ""
@@ -95,12 +95,17 @@ class AppConfig:
     sample_rate: int = 16000
     hud_bottom_margin_px: int = 60
     custom_vocabulary_path: str = "custom_vocabulary.json"
+    stt_language: str = "es"
     silence_threshold_seconds: float = 1.2
     energy_rms_threshold: float = 0.015
 
 
-class VoiceFlowException(Exception):
-    """Base exception for all VoiceFlow-Win errors."""
+class MorocoVoiceException(Exception):
+    """Base exception for all MorocoVoice errors."""
+
+
+# Backward compatibility alias
+VoiceFlowException = MorocoVoiceException
 
 
 class AudioCaptureError(VoiceFlowException):

@@ -355,8 +355,11 @@ def main() -> None:
         sys.exit(0)
 
     app.start()
-    # Show settings modal on initial launch for immediate visual feedback and confirmation
-    app.open_settings()
+    # Show settings modal on first run if no valid API key is configured
+    from app.config import is_valid_groq_api_key
+
+    if not is_valid_groq_api_key(config.groq_api_key):
+        app.open_settings()
     try:
         root.mainloop()
     except KeyboardInterrupt:

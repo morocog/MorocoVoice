@@ -1,9 +1,9 @@
 [project]
 name = "morocovoice"
-version = "1.0.0"
+version = "1.0.1"
 description = "Industrial voice dictation and contextual rewriting suite for Windows 10/11 x64 (Wispr Flow parity)"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [
     { name = "Ricardo García", email = "rgarcia@telat-group.com" }

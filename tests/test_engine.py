@@ -38,3 +38,30 @@ def test_repetitive_loop_detection():
 
     normal_text = "El reporte de operaciones y Workforce Management fue completado exitosamente."
     assert not detect_repetitive_loops(normal_text, min_words=4, min_repeats=3)
+
+
+def test_vocabulary_post_processing_corrections():
+    """Verify deterministic vocabulary post-processor corrects known phonetic slips."""
+    from app.engine.engine_manager import apply_vocabulary_post_processing
+
+    vocab = ["GitHub", "Workforce Management", "Antigravity", "Python", "MorocoVoice"]
+
+    # 1. Hard phonetic homophone: gitcop -> GitHub
+    raw_1 = "acabo de dictar gitcop y funcionó"
+    assert apply_vocabulary_post_processing(raw_1, vocab) == "acabo de dictar GitHub y funcionó"
+
+    # 2. Case normalization
+    raw_2 = "sube el repositorio a github"
+    assert apply_vocabulary_post_processing(raw_2, vocab) == "sube el repositorio a GitHub"
+
+    # 3. Multi-word phrase matching
+    raw_3 = "analizando el área de workforce management en tiempo real"
+    assert (
+        apply_vocabulary_post_processing(raw_3, vocab)
+        == "analizando el área de Workforce Management en tiempo real"
+    )
+
+    # 4. Preserve common Spanish words without false positives
+    raw_4 = "este reporte es para el equipo"
+    assert apply_vocabulary_post_processing(raw_4, vocab) == "este reporte es para el equipo"
+

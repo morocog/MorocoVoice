@@ -85,10 +85,12 @@ class LocalWhisperEngine:
         model_size: str = "base",
         device: str = "cpu",
         compute_type: str = "int8",
+        language: str = "es",
     ) -> None:
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
+        self.language = language
         self._model: WhisperModel | None = None
 
     def initialize(self) -> None:
@@ -125,7 +127,7 @@ class LocalWhisperEngine:
 
         if len(audio_data) == 0:
             return TranscriptionResult(
-                text="", language="es", duration_ms=0.0, confidence=0.0, engine=AudioEngineType.LOCAL
+                text="", language=self.language, duration_ms=0.0, confidence=0.0, engine=AudioEngineType.LOCAL
             )
 
         t0 = time.perf_counter()
@@ -134,7 +136,7 @@ class LocalWhisperEngine:
             segments, info = self._model.transcribe(
                 audio_data,
                 beam_size=5,
-                language="es",
+                language=self.language,
                 initial_prompt=initial_prompt,
                 vad_filter=False,  # VAD already handled upstream
             )

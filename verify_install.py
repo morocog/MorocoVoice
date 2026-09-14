@@ -202,7 +202,7 @@ def main() -> None:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
         print("=" * 70)
-        print("         DIAGNÓSTICO DE SISTEMA: VOICEFLOW-WIN v3.4.1")
+        print("            DIAGNÓSTICO DE SISTEMA: MOROCOVOICE v1.0.1")
         print("=" * 70)
         print("Plataforma:           Windows (win32) [OK]")
         print(f"Entorno Python:       {py_msg}")

@@ -56,17 +56,18 @@ def numpy_to_wav_bytes(audio_data: np.ndarray, sample_rate: int = 16000) -> byte
 class CloudGroqWhisperEngine:
     """Cloud STT engine backed by Groq whisper-large-v3."""
 
-    def __init__(self, api_key: str, model: str = "whisper-large-v3") -> None:
+    def __init__(self, api_key: str, model: str = "whisper-large-v3", language: str = "es") -> None:
         self.api_key = api_key
         self.model = model
+        self.language = language
         self._client: Groq | None = None
 
     def _get_client(self) -> Groq:
-        """Lazy initialization of the Groq API client."""
+        """Lazy initialization of the Groq API client with 15s timeout."""
         if self._client is None:
             if not self.api_key:
                 raise InferenceError("GROQ_API_KEY is not configured for Cloud STT.")
-            self._client = Groq(api_key=self.api_key)
+            self._client = Groq(api_key=self.api_key, timeout=15.0)
         return self._client
 
     def transcribe(
@@ -75,7 +76,7 @@ class CloudGroqWhisperEngine:
         """Transcribe audio via Groq Whisper API entirely in memory."""
         if len(audio_data) == 0:
             return TranscriptionResult(
-                text="", language="es", duration_ms=0.0, confidence=1.0, engine=AudioEngineType.CLOUD
+                text="", language=self.language, duration_ms=0.0, confidence=1.0, engine=AudioEngineType.CLOUD
             )
 
         t0 = time.perf_counter()
@@ -87,7 +88,7 @@ class CloudGroqWhisperEngine:
             kwargs = {
                 "file": audio_file,
                 "model": self.model,
-                "language": "es",
+                "language": self.language,
                 "response_format": "verbose_json",
             }
             if initial_prompt:

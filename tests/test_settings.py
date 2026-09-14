@@ -33,3 +33,20 @@ def test_persist_groq_api_key_creates_and_updates(tmp_path) -> None:
     assert "gsk_initial123" not in updated_content
     assert "# Header comment" in updated_content
     assert "OLLAMA_URL=http://localhost:11434" in updated_content
+
+
+def test_is_valid_groq_api_key():
+    """Verify placeholder keys are rejected and valid keys are accepted."""
+    from app.config import is_valid_groq_api_key
+
+    # Placeholders or empty
+    assert not is_valid_groq_api_key("")
+    assert not is_valid_groq_api_key(None)
+    assert not is_valid_groq_api_key("gsk_tu_clave_de_groq_aqui")
+    assert not is_valid_groq_api_key("gsk_tu_clave")
+    assert not is_valid_groq_api_key("tu_clave_aqui")
+    assert not is_valid_groq_api_key("gsk_short")
+
+    # Valid key format
+    assert is_valid_groq_api_key("gsk_1234567890abcdefghijklmnopqrstuvwxyz")
+
