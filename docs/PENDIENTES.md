@@ -10,7 +10,7 @@
 - [ ] **Prueba de Reescritura Contextual (`Ctrl + Shift + Space`):** Seleccionar una frase con errores en VS Code o Word, pulsar `Ctrl + Shift + Space` y validar que el LLM reemplace el texto contextualmente.
 - [ ] **Prueba de Atajo de Diagnóstico (`Ctrl + Shift + D`):** Pulsar `Ctrl + Shift + D` y corroborar que se abra `voiceflow.log` en el Bloc de Notas.
 - [ ] **Prueba de Salida Ordenada (`Ctrl + Shift + Q`):** Pulsar `Ctrl + Shift + Q` y verificar que el icono desaparezca de la bandeja del sistema y el proceso finalice limpiamente.
-- [ ] **Configuración de `GROQ_API_KEY` (Opcional):** Si se desea paridad total con Wispr Flow (~400 ms de latencia), agregar la clave en `.env`.
+- [x] **Configuración de `GROQ_API_KEY` (Completado):** Clave `MorocoVoice` configurada en `.env` y validada en caliente con `whisper-large-v3-turbo` y `qwen/qwen3.8-27b` (~400 ms de latencia).
 
 ---
 
