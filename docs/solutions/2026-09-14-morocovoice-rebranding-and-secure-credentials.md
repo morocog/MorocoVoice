@@ -2,13 +2,13 @@
 
 - **Fecha:** 2026-09-14
 - **Versión Desplegada:** `MorocoVoice v3.5.0`
-- **Autor:** Ricardo García (`moroc`)
+- **Autor:** Ricardo García (`morocog`)
 - **Estado:** Implementado, Verificado con 26 Pruebas Automatizadas y Documentado
 
 ---
 
 ## 1. Contexto y Síntomas
-La aplicación de dictado por voz y refinamiento semántico contextual requería pasar de una prueba técnica local denominada genéricamente `VoiceFlow-Win` a un producto de código abierto de nivel industrial bautizado como **MorocoVoice** (en honor al alias de GitHub del autor, `moroc`), listo para compartirse públicamente sin fricciones para usuarios de Windows 10/11 x64.
+La aplicación de dictado por voz y refinamiento semántico contextual requería pasar de una prueba técnica local denominada genéricamente `VoiceFlow-Win` a un producto de código abierto de nivel industrial bautizado como **MorocoVoice** (en honor al alias de GitHub del autor, `morocog`), listo para compartirse públicamente sin fricciones para usuarios de Windows 10/11 x64.
 Adicionalmente, se identificó que:
 1. La clave de API de Groq requería configuración manual en archivos de texto, exponiéndose a filtraciones accidentales si se guardaba en archivos rastreados por Git (`config.json`) o permitiendo que curiosos o transmisiones de pantalla (*shoulder surfing*) leyeran la clave.
 2. Si un usuario externo clonaba el repositorio, carecía de un mecanismo *"Plug & Play"* de un solo clic para inicializar el entorno virtual e instalar las dependencias de forma desatendida.

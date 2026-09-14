@@ -20,7 +20,7 @@
 
 Herramientas comerciales populares como **Wispr Flow** o **Superwhisper** cobran suscripciones recurrentes de entre **$144 y $180 USD al año**, consumen gigabytes de memoria o priorizan exclusivamente el ecosistema macOS.
 
-**MorocoVoice** fue desarrollado por **Ricardo García ([@moroc](https://github.com/moroc))** para resolver esta necesidad de forma nativa en **Windows 10/11 x64**:
+**MorocoVoice** fue desarrollado por **Ricardo García ([@morocog](https://github.com/morocog))** para resolver esta necesidad de forma nativa en **Windows 10/11 x64**:
 
 | Característica | 🎙️ **MorocoVoice** | ⚡ Wispr Flow | 🦉 Superwhisper |
 | :--- | :---: | :---: | :---: |
@@ -41,7 +41,7 @@ No necesitas compilar modelos pesados ni pelear con comandos de terminal:
 
 ### 1. Clonar el Repositorio
 ```cmd
-git clone https://github.com/moroc/MorocoVoice.git
+git clone https://github.com/morocog/MorocoVoice.git
 cd MorocoVoice
 ```
 
@@ -134,5 +134,5 @@ MorocoVoice incluye una suite de pruebas automatizadas que validan inyección, d
 
 Distribuido bajo la Licencia **MIT**. Consulta [`LICENSE`](LICENSE) para más detalles.
 
-Desarrollado con dedicación por **Ricardo García** ([GitHub: @moroc](https://github.com/moroc) / `rgarcia@telat-group.com`).
+Desarrollado con dedicación por **Ricardo García** ([GitHub: @morocog](https://github.com/morocog) / `rgarcia@telat-group.com`).
 Si MorocoVoice te ahorra tiempo y dinero, ¡no dudes en dejarle una ⭐ estrella al repositorio!

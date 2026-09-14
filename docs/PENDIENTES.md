@@ -26,7 +26,7 @@
 
 ## 🟢 3. DEUDA TÉCNICA CONOCIDA & DECISIONES ARQUITECTÓNICAS
 
-- **Rebranding Canónico MorocoVoice:** Named Mutex `Global\MorocoVoice_SingleInstance_Mutex`, log canónico `morocovoice.log`, UI y bandeja actualizados con metadatos a nombre de Ricardo García (`moroc`).
+- **Rebranding Canónico MorocoVoice:** Named Mutex `Global\MorocoVoice_SingleInstance_Mutex`, log canónico `morocovoice.log`, UI y bandeja actualizados con metadatos a nombre de Ricardo García (`morocog`).
 - **Exclusión de PyTorch:** Se mantiene la política estricta de Cero-PyTorch utilizando exclusivamente ONNX Runtime y CTranslate2 para reducir el footprint de instalación de ~4.5 GB a menos de 450 MB.
 - **Auditoría UIPI:** Verificación obligatoria de `TokenElevation` para evitar que Windows bloquee silenciosamente la inyección de teclado cuando una ventana activa corre como Administrador.
 - **Inyección por Fases no Destructiva:** `SendInput` con 3 fases, liberación de modificadores residuales y respaldo del portapapeles con bloqueo reentrante (`threading.RLock`), restaurando a los 120 ms.
