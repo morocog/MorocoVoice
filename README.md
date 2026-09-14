@@ -68,10 +68,8 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 | :--- | :--- | :--- |
 | **`Win + Space`** | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa en ~400 ms. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
-| **`Ctrl + Shift + D`** | **Diagnóstico en Vivo** | Abre el archivo `morocovoice.log` en el Bloc de Notas para inspección técnica en tiempo real. |
-| **`Ctrl + Shift + Q`** | **Apagado Seguro** | Cierra la aplicación de forma limpia, liberando hooks globales y restaurando el portapapeles. |
 
-> 💡 *Puedes personalizar cualquiera de estos atajos en cualquier momento desde el menú de la bandeja del sistema (clic derecho en el micrófono azul junto al reloj ➔ **⚙️ Configuración...**).*
+> 💡 *Para ver los registros de depuración o cerrar la aplicación de forma limpia, simplemente haz clic derecho en el icono de MorocoVoice en la bandeja del sistema (junto al reloj de Windows).*
 
 ---
 

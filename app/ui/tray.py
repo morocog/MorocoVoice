@@ -69,8 +69,8 @@ class SystemTrayManager:
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("⚙️ Configuración...", self._on_settings_clicked),
-            pystray.MenuItem("Abrir Logs (Ctrl+Shift+D)", self._on_open_logs),
-            pystray.MenuItem("Salir (Ctrl+Shift+Q)", self._on_exit_clicked),
+            pystray.MenuItem("Abrir Logs", self._on_open_logs),
+            pystray.MenuItem("Salir", self._on_exit_clicked),
         )
 
         self.icon = pystray.Icon(

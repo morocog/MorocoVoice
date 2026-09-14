@@ -1,8 +1,6 @@
 {
   "hotkey_dictation": "win+space",
   "hotkey_rewrite": "ctrl+shift+space",
-  "hotkey_shutdown": "ctrl+shift+q",
-  "hotkey_diagnostics": "ctrl+shift+d",
   "engine": "CLOUD",
   "groq_stt_model": "whisper-large-v3-turbo",
   "groq_llm_model": "qwen/qwen3.8-27b",

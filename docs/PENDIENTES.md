@@ -9,9 +9,7 @@
 - [x] **Prueba de Dictado en Caliente (`Win + Space`) [v3.4.1]:** Probado y validado en caliente en Antigravity IDE con Groq Cloud (~1.2s de latencia por 350 caracteres).
 - [x] **Prueba de Reescritura Contextual (`Ctrl + Shift + Space`) [v3.4.1]:** Probado y validado en caliente en texto crudo seleccionado; reemplazo contextual sin conflictos con la terminal.
 - [x] **Enmascaramiento de Credenciales Groq (`SettingsModal`) [v3.5.0]:** Campo con asteriscos `••••••••`, botón alternador `👁️` y persistencia atómica en `.env` sin riesgo de exposición en Git.
-- [x] **Instalador Zero-Touch en `run.bat` [v3.5.0]:** Detección automática de `.venv`, instalación desatendida de dependencias y arranque inmediato sin comandos de terminal.
-- [ ] **Prueba de Atajo de Diagnóstico (`Ctrl + Shift + D`):** Pulsar `Ctrl + Shift + D` y corroborar que se abra `morocovoice.log` en el Bloc de Notas.
-- [ ] **Prueba de Salida Ordenada (`Ctrl + Shift + Q`):** Pulsar `Ctrl + Shift + Q` y verificar que el icono desaparezca de la bandeja del sistema y el proceso finalice limpiamente.
+- [x] **Eliminación de Atajos Secundarios Conflictivos [v3.5.1]:** Se eliminaron `Ctrl+Shift+D` y `Ctrl+Shift+Q` para evitar colisiones nativas con navegadores (ej: guardar marcadores en Chrome) y dejar el sistema 100% enfocado en Dictado y Reescritura. Salida y logs gestionados limpiamente desde la bandeja.
 
 ---
 

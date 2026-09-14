@@ -80,8 +80,8 @@ class AppConfig:
     """Immutable application configuration."""
     hotkey_dictation: str = "alt+space"
     hotkey_rewrite: str = "ctrl+shift+space"
-    hotkey_shutdown: str = "ctrl+shift+q"
-    hotkey_diagnostics: str = "ctrl+shift+d"
+    hotkey_shutdown: str = ""
+    hotkey_diagnostics: str = ""
     engine: AudioEngineType = AudioEngineType.CLOUD
     groq_api_key: str = ""
     groq_stt_model: str = "whisper-large-v3"

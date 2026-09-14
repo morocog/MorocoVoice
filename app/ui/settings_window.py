@@ -79,7 +79,7 @@ class SettingsModal:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("MorocoVoice - Configuración")
-        self.window.geometry("540x680")
+        self.window.geometry("540x580")
         self.window.resizable(False, False)
         self.window.configure(bg="#18181b")
 
@@ -99,7 +99,7 @@ class SettingsModal:
         """Center the modal on the current screen."""
         self.window.update_idletasks()
         w = 540
-        h = 680
+        h = 580
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
         x = max(0, (sw - w) // 2)
@@ -135,36 +135,22 @@ class SettingsModal:
         content.pack(fill=tk.BOTH, expand=True)
 
         # --- Section 1: Atajos de Teclado ---
-        self._create_section_label(content, "ATALOS DE TECLADO (SHORTCUTS)")
+        self._create_section_label(content, "ATAJOS DE TECLADO (CORE SHORTCUTS)")
 
         self.var_dictation = tk.StringVar(value=self.current_config.hotkey_dictation)
         self.var_rewrite = tk.StringVar(value=self.current_config.hotkey_rewrite)
-        self.var_diagnostics = tk.StringVar(value=self.current_config.hotkey_diagnostics)
-        self.var_shutdown = tk.StringVar(value=self.current_config.hotkey_shutdown)
 
         self._create_entry_row(
             content,
             label="Dictado Inteligente:",
             var=self.var_dictation,
-            help_text="Ej: ctrl+alt+space, alt+z, ctrl+shift+v",
+            help_text="Ej: win+space, ctrl+alt+space, alt+z",
         )
         self._create_entry_row(
             content,
             label="Reescritura Contextual:",
             var=self.var_rewrite,
             help_text="Ej: ctrl+shift+space",
-        )
-        self._create_entry_row(
-            content,
-            label="Diagnósticos en Vivo:",
-            var=self.var_diagnostics,
-            help_text="Ej: ctrl+shift+d",
-        )
-        self._create_entry_row(
-            content,
-            label="Apagado Seguro:",
-            var=self.var_shutdown,
-            help_text="Ej: ctrl+shift+q",
         )
 
         # --- Section 2: Motor y Modelos ---
@@ -432,8 +418,6 @@ class SettingsModal:
         try:
             dictation_val = self.var_dictation.get().strip()
             rewrite_val = self.var_rewrite.get().strip()
-            shutdown_val = self.var_shutdown.get().strip()
-            diagnostics_val = self.var_diagnostics.get().strip()
             engine_str = self.var_engine.get().strip().upper()
             stt_model = self.var_stt_model.get().strip()
             llm_model = self.var_llm_model.get().strip()
@@ -458,14 +442,15 @@ class SettingsModal:
             cfg_dict.update({
                 "hotkey_dictation": dictation_val,
                 "hotkey_rewrite": rewrite_val,
-                "hotkey_shutdown": shutdown_val,
-                "hotkey_diagnostics": diagnostics_val,
                 "engine": engine_type.value,
                 "groq_stt_model": stt_model,
                 "groq_llm_model": llm_model,
                 "max_recording_seconds": max_sec,
                 "clipboard_restore_delay_ms": delay_ms,
             })
+            # Clean obsolete keys if present
+            cfg_dict.pop("hotkey_shutdown", None)
+            cfg_dict.pop("hotkey_diagnostics", None)
 
             # Save to config.json atomically
             with open(self.config_path, "w", encoding="utf-8") as f:
