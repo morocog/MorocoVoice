@@ -79,7 +79,7 @@ def setup_logging(log_dir: str | Path | None = None) -> logging.Logger:
     logger.addHandler(console_handler)
 
     _root_logger_initialized = True
-    logger.info("VoiceFlow-Win logging subsystem initialized (PII-Safe RotatingFileHandler).")
+    logger.info("MorocoVoice logging subsystem initialized (PII-Safe RotatingFileHandler).")
     return logger
 
 
