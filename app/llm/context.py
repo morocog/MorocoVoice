@@ -13,7 +13,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 from app.logging_setup import get_logger
-from app.platform.injector import get_clipboard_text, set_clipboard_text
+from app.platform.injector import get_clipboard_text, send_ctrl_c, set_clipboard_text
 
 logger = get_logger("context")
 
@@ -98,20 +98,17 @@ def get_foreground_app_info() -> tuple[str, int, bool]:
 
 
 def get_selected_text() -> str:
-    """Capture selected text in foreground application using simulated Ctrl+C."""
+    """Capture selected text in foreground application using simulated staged Ctrl+C."""
     # Backup original clipboard
     orig_clipboard = get_clipboard_text()
 
     # Clear clipboard to detect if copy succeeds
     set_clipboard_text("")
 
-    # Simulate Ctrl+C via keybd_event for minimal latency
-    ctypes.windll.user32.keybd_event(VK_CONTROL, 0, 0, 0)
-    ctypes.windll.user32.keybd_event(VK_C, 0, 0, 0)
-    ctypes.windll.user32.keybd_event(VK_C, 0, KEYEVENTF_KEYUP, 0)
-    ctypes.windll.user32.keybd_event(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0)
+    # Simulate clean Ctrl+C via staged SendInput with explicit modifier release
+    send_ctrl_c()
 
-    time.sleep(0.08)  # Wait for application to fill clipboard
+    time.sleep(0.12)  # Wait for application to fill clipboard
     selected = get_clipboard_text()
 
     # Restore original clipboard

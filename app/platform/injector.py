@@ -21,6 +21,7 @@ logger = get_logger("injector")
 VK_SHIFT = 0x10
 VK_CONTROL = 0x11
 VK_MENU = 0x12
+VK_C = 0x43
 VK_LWIN = 0x5B
 VK_RWIN = 0x5C
 VK_V = 0x56
@@ -206,6 +207,40 @@ def send_ctrl_v() -> None:
     press_v[1].type = INPUT_KEYBOARD
     press_v[1].union.ki = KEYBDINPUT(VK_V, 0, KEYEVENTF_KEYUP, 0, 0)
     ctypes.windll.user32.SendInput(2, ctypes.byref(press_v), cb_size)
+    time.sleep(0.015)
+
+    # 3. Ctrl Up
+    up_ctrl = (INPUT * 1)()
+    up_ctrl[0].type = INPUT_KEYBOARD
+    up_ctrl[0].union.ki = KEYBDINPUT(VK_CONTROL, 0, KEYEVENTF_KEYUP, 0, 0)
+    ctypes.windll.user32.SendInput(1, ctypes.byref(up_ctrl), cb_size)
+    time.sleep(0.02)
+
+
+def send_ctrl_c() -> None:
+    """Synthesize clean Ctrl+C keydown/keyup events using staged Win32 SendInput.
+
+    Releases physical modifiers (Shift/Alt/Win) to guarantee the OS never intercepts
+    this as Ctrl+Shift+C (which opens the terminal in VS Code/Antigravity IDE).
+    """
+    release_modifiers()
+
+    cb_size = ctypes.sizeof(INPUT)
+
+    # 1. Ctrl Down
+    down_ctrl = (INPUT * 1)()
+    down_ctrl[0].type = INPUT_KEYBOARD
+    down_ctrl[0].union.ki = KEYBDINPUT(VK_CONTROL, 0, 0, 0, 0)
+    ctypes.windll.user32.SendInput(1, ctypes.byref(down_ctrl), cb_size)
+    time.sleep(0.015)
+
+    # 2. C Down and C Up
+    press_c = (INPUT * 2)()
+    press_c[0].type = INPUT_KEYBOARD
+    press_c[0].union.ki = KEYBDINPUT(VK_C, 0, 0, 0, 0)
+    press_c[1].type = INPUT_KEYBOARD
+    press_c[1].union.ki = KEYBDINPUT(VK_C, 0, KEYEVENTF_KEYUP, 0, 0)
+    ctypes.windll.user32.SendInput(2, ctypes.byref(press_c), cb_size)
     time.sleep(0.015)
 
     # 3. Ctrl Up

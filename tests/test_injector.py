@@ -54,3 +54,12 @@ def test_release_modifiers_executes_safely():
     release_modifiers()
     assert True
 
+
+def test_send_ctrl_c_executes_safely():
+    """Verify send_ctrl_c releases modifiers and executes without Win32 exceptions."""
+    from app.platform.injector import send_ctrl_c
+
+    send_ctrl_c()
+    assert True
+
+

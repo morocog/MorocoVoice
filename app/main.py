@@ -255,15 +255,19 @@ class VoiceFlowApplication:
             self._dispatch_uipi_alert()
             return
 
-        selected_text = get_selected_text()
-        if not selected_text:
-            logger.info("No text was selected for contextual rewrite.")
-            return
+        def _rewrite_pipeline() -> None:
+            # 60ms grace pause ensures physical keypress release before synthetic Ctrl+C
+            time.sleep(0.06)
+            selected_text = get_selected_text()
+            if not selected_text:
+                logger.info("No text was selected for contextual rewrite.")
+                self._dispatch_hud(AppState.ERROR, "Selecciona texto primero")
+                self.root.after(2000, self.hud.hide)
+                return
 
-        play_sound_blip()
-        self._dispatch_hud(AppState.PROCESSING, "Reescribiendo...")
+            play_sound_blip()
+            self._dispatch_hud(AppState.PROCESSING, "Reescribiendo...")
 
-        def _rewrite_worker() -> None:
             try:
                 res = self.rewriter.rewrite_selection(selected_text, app_name)
                 if res.success and res.rewritten_text:
@@ -280,7 +284,7 @@ class VoiceFlowApplication:
                 self._dispatch_hud(AppState.ERROR, "Error al Reescribir")
                 self.root.after(2000, self.hud.hide)
 
-        threading.Thread(target=_rewrite_worker, daemon=True, name="RewriteWorker").start()
+        threading.Thread(target=_rewrite_pipeline, daemon=True, name="RewritePipeline").start()
 
     def trigger_diagnostics(self) -> None:
         """Open log file in Notepad (Ctrl+Shift+D)."""
