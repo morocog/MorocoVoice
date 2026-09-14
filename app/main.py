@@ -83,6 +83,7 @@ class VoiceFlowApplication:
             on_open_settings=self.open_settings,
             engine_type=config.engine,
             vad_mode=self.vad.get_mode(),
+            hotkey_dictation=config.hotkey_dictation,
         )
         self.hotkeys = HotkeyListener(
             hotkey_dictation=config.hotkey_dictation,
@@ -110,7 +111,7 @@ class VoiceFlowApplication:
         )
         self.engine_mgr = EngineManager(new_config)
         self.rewriter = SemanticRewriter(new_config)
-        self.tray.update_status(new_config.engine, self.vad.get_mode())
+        self.tray.update_status(new_config.engine, self.vad.get_mode(), new_config.hotkey_dictation)
         logger.info("Configuration hot-reloaded successfully in live runtime.")
 
     def enforce_single_instance(self) -> bool:

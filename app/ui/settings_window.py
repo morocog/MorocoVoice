@@ -195,14 +195,20 @@ class SettingsModal:
 
         # Bottom status notice bar
         status_bar = tk.Frame(self.window, bg="#1e1e24")
-        status_bar.pack(fill=tk.X, side=tk.BOTTOM)
-        tk.Label(
+        self.status_bar_lbl = tk.Label(
             status_bar,
             text="🟢 VoiceFlow-Win está activo en segundo plano. Dictado listo con: " + self.var_dictation.get(),
             font=("Segoe UI", 8, "bold"),
             fg="#10b981",
             bg="#1e1e24",
-        ).pack(side=tk.LEFT, padx=16, pady=5)
+        )
+        self.status_bar_lbl.pack(side=tk.LEFT, padx=16, pady=5)
+        self.var_dictation.trace_add(
+            "write",
+            lambda *_: self.status_bar_lbl.configure(
+                text="🟢 VoiceFlow-Win está activo en segundo plano. Dictado listo con: " + self.var_dictation.get()
+            ),
+        )
 
         # Bottom action buttons bar
         btn_bar = tk.Frame(self.window, bg="#27272a", height=50)

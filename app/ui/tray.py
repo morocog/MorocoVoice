@@ -48,12 +48,14 @@ class SystemTrayManager:
         on_open_settings: Callable[[], None] | None = None,
         engine_type: AudioEngineType = AudioEngineType.CLOUD,
         vad_mode: VADMode = VADMode.SILERO,
+        hotkey_dictation: str = "win+space",
     ) -> None:
         self.root = root
         self.on_shutdown = on_shutdown
         self.on_open_settings = on_open_settings
         self.engine_type = engine_type
         self.vad_mode = vad_mode
+        self.hotkey_dictation = hotkey_dictation
 
         self.icon: pystray.Icon | None = None
         self._thread: threading.Thread | None = None
@@ -62,7 +64,7 @@ class SystemTrayManager:
         """Launch the system tray icon loop inside a daemon thread."""
         image = create_tray_icon_image()
         menu = pystray.Menu(
-            pystray.MenuItem("VoiceFlow-Win v0.1.0", None, enabled=False),
+            pystray.MenuItem("VoiceFlow-Win v3.4.1", None, enabled=False),
             pystray.MenuItem(self._get_engine_label, None, enabled=False),
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
@@ -74,7 +76,7 @@ class SystemTrayManager:
         self.icon = pystray.Icon(
             name="VoiceFlow-Win",
             icon=image,
-            title="VoiceFlow-Win: Dictado Inteligente",
+            title=f"VoiceFlow-Win: Dictado ({self.hotkey_dictation})",
             menu=menu,
         )
 
@@ -89,7 +91,7 @@ class SystemTrayManager:
                 try:
                     self.icon.notify(
                         title="VoiceFlow-Win Activo 🎙️",
-                        message="Presiona Ctrl+Alt+Space para dictar o clic derecho para Configuración.",
+                        message=f"Presiona {self.hotkey_dictation} para dictar o clic derecho para Configuración.",
                     )
                 except Exception:
                     pass
@@ -104,11 +106,14 @@ class SystemTrayManager:
             return "VAD: Silero (ONNX)"
         return "VAD: RMS (degradado)"
 
-    def update_status(self, engine: AudioEngineType, vad: VADMode) -> None:
-        """Update displayed menu status labels."""
+    def update_status(self, engine: AudioEngineType, vad: VADMode, hotkey_dictation: str | None = None) -> None:
+        """Update displayed menu status labels and shortcuts."""
         self.engine_type = engine
         self.vad_mode = vad
+        if hotkey_dictation:
+            self.hotkey_dictation = hotkey_dictation
         if self.icon:
+            self.icon.title = f"VoiceFlow-Win: Dictado ({self.hotkey_dictation})"
             self.icon.update_menu()
 
     def _on_settings_clicked(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
