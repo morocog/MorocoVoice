@@ -84,10 +84,10 @@ def setup_logging(log_dir: str | Path | None = None) -> logging.Logger:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a child logger under the voiceflow namespace."""
+    """Get a child logger under the morocovoice namespace."""
     if not _root_logger_initialized:
         setup_logging()
-    return logging.getLogger(f"voiceflow.{name}")
+    return logging.getLogger(f"morocovoice.{name}")
 
 
 def get_log_file_path() -> Path:
