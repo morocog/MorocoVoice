@@ -88,18 +88,24 @@ def _persist_groq_api_key_to_env(env_path: Path, api_key: str) -> None:
 
 
 def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool, str]:
-    """Verify Groq API key by attempting to fetch model list with short timeout."""
+    """Verify Groq API key by attempting to fetch model list with short timeout and no retries."""
     try:
         from groq import Groq
-        client = Groq(api_key=api_key, timeout=timeout)
+        client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
         client.models.list()
         return True, "Clave válida y autorizada."
     except Exception as e:
         err_msg = str(e)
         if "401" in err_msg or "invalid_api_key" in err_msg.lower() or "unauthorized" in err_msg.lower():
             return False, "La clave de Groq es inválida o fue revocada (Error 401: Unauthorized)."
-        elif "connection" in err_msg.lower() or "timeout" in err_msg.lower():
-            return True, "No se pudo verificar la conexión con Groq (sin internet o timeout), pero la clave fue guardada."
+        elif (
+            "connection" in err_msg.lower()
+            or "timeout" in err_msg.lower()
+            or "429" in err_msg
+            or "500" in err_msg
+            or "503" in err_msg
+        ):
+            return True, "No se pudo verificar la conexión con Groq (sin internet, timeout o límite de tasa), pero la clave fue guardada."
         return False, f"Error al verificar la clave de Groq: {e}"
 
 
@@ -175,7 +181,7 @@ class SettingsModal:
 
         subtitle_lbl = tk.Label(
             banner,
-            text="v1.0.1",
+            text="v1.0.3",
             font=("Segoe UI", 9, "bold"),
             fg="#FECA66",
             bg="#27272a",

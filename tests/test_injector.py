@@ -20,21 +20,28 @@ def test_input_struct_size():
 
 
 def test_clipboard_roundtrip():
-    """Verify clipboard get and set operations retain Unicode text accurately."""
-    test_str = "VoiceFlow-Win-Test-Unicode-123_ñáéíóú"
-    success = set_clipboard_text(test_str)
-    if not success:
-        pytest.skip("Clipboard unavailable in current headless test runner.")
+    """Verify clipboard get and set operations retain Unicode text accurately, preserving developer clipboard."""
+    original = get_clipboard_text()
+    try:
+        test_str = "MorocoVoice-Test-Unicode-123_ñáéíóú"
+        success = set_clipboard_text(test_str)
+        if not success:
+            pytest.skip("Clipboard unavailable in current headless test runner.")
 
-    result = get_clipboard_text()
-    assert result == test_str
+        result = get_clipboard_text()
+        assert result == test_str
+    finally:
+        if original:
+            set_clipboard_text(original)
 
 
 def test_emergency_restore_safeguard():
     """Verify emergency_restore resets pending backup safely."""
+    from app.platform import injector
+
+    injector._active_backup_text = "test_backup"
     emergency_restore()
-    # Should complete without throwing exceptions
-    assert True
+    assert injector._active_backup_text is None
 
 
 def test_clipboard_lock_reentrancy():
@@ -44,7 +51,12 @@ def test_clipboard_lock_reentrancy():
     with _clipboard_lock:
         # Calling emergency_restore while holding lock MUST NOT deadlock
         emergency_restore()
-    assert True
+
+    # Verify lock can be acquired and released cleanly without hanging
+    acquired = _clipboard_lock.acquire(blocking=False)
+    if acquired:
+        _clipboard_lock.release()
+    assert acquired is True
 
 
 def test_release_modifiers_executes_safely():

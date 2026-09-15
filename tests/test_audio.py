@@ -62,20 +62,42 @@ def test_audio_recorder_speech_detection_tracking():
 
 
 def test_pii_safe_filter_redacts_formatted_args():
-    """Verify PIISafeFilter redacts messages even when sensitive terms are passed via record.args."""
+    """Verify PIISafeFilter redacts messages with realistic speech transcripts and dictionary payloads."""
     import logging
 
     from app.logging_setup import PIISafeFilter
 
     f = PIISafeFilter()
 
-    # Case 1: Raw payload in message string
+    # Case 1: Raw dict payload
     record1 = logging.LogRecord("test", logging.INFO, "path", 10, "Payload: 'transcription': 'secret'", (), None)
     f.filter(record1)
     assert record1.msg == "[REDACTED_PII_PAYLOAD]"
 
-    # Case 2: Sensitive payload in record.args
-    record2 = logging.LogRecord("test", logging.INFO, "path", 10, "Result text: '%s' -> '%s'", ("text", "replaced"), None)
+    # Case 2: Realistic post-processing leak with arbitrary user speech
+    record2 = logging.LogRecord(
+        "test",
+        logging.INFO,
+        "path",
+        10,
+        "Vocabulary post-processing adjusted text: '%s' -> '%s'",
+        ("la reunion confidencial de las 5", "la reunion confidencial de las 17:00"),
+        None,
+    )
     f.filter(record2)
     assert record2.msg == "[REDACTED_PII_PAYLOAD]"
     assert record2.args == ()
+
+    # Case 3: Direct user transcription leak
+    record3 = logging.LogRecord(
+        "test",
+        logging.INFO,
+        "path",
+        10,
+        "Transcription: %s",
+        ("contrasena secreta 1234",),
+        None,
+    )
+    f.filter(record3)
+    assert record3.msg == "[REDACTED_PII_PAYLOAD]"
+    assert record3.args == ()

@@ -195,7 +195,7 @@ class EngineManager:
         corrected_text = apply_vocabulary_post_processing(raw_result.text, self.vocabulary_terms)
         if corrected_text != raw_result.text:
             delta = len(corrected_text) - len(raw_result.text)
-            logger.info("Vocabulary post-processing applied (%+d char delta).", delta)
+            logger.info("Vocabulary post-processing applied (phonetic match corrected, %+d char delta).", delta)
 
         return dataclasses.replace(raw_result, text=corrected_text)
 

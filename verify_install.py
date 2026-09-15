@@ -1,4 +1,4 @@
-"""Environment and hardware diagnostics tool for VoiceFlow-Win.
+"""Environment and hardware diagnostics tool for MorocoVoice.
 
 Validates Windows platform, Python 3.11+, audio devices, NVIDIA CUDA/VRAM,
 LongPathsEnabled registry key, and dependency integrity.
@@ -22,7 +22,7 @@ from typing import Any
 
 # Step 1: Check platform
 if sys.platform != "win32":
-    print("CRITICAL ERROR: VoiceFlow-Win requires Windows 10/11 x64. Aborting.")
+    print("CRITICAL ERROR: MorocoVoice requires Windows 10/11 x64. Aborting.")
     sys.exit(1)
 
 
@@ -202,7 +202,7 @@ def main() -> None:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
         print("=" * 70)
-        print("            DIAGNÓSTICO DE SISTEMA: MOROCOVOICE v1.0.1")
+        print("            DIAGNÓSTICO DE SISTEMA: MOROCOVOICE v1.0.3")
         print("=" * 70)
         print("Plataforma:           Windows (win32) [OK]")
         print(f"Entorno Python:       {py_msg}")
@@ -223,7 +223,7 @@ def main() -> None:
             for w in warnings:
                 print(f"  [!] {w}")
         if exit_code == 0:
-            print("\nRESULTADO: Sistema 100% OPERATIVO para VoiceFlow-Win.")
+            print("\nRESULTADO: Sistema 100% OPERATIVO para MorocoVoice.")
         elif exit_code == 2:
             print("\nRESULTADO: Sistema OPERATIVO con advertencias menores (CPU/Cloud fallback).")
         else:

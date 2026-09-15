@@ -22,9 +22,19 @@ _root_logger_initialized = False
 
 
 class PIISafeFilter(logging.Filter):
-    """Safety filter ensuring sensitive keywords or raw payload variables do not leak."""
+    """Safety filter ensuring sensitive user audio transcriptions or LLM prompts do not leak."""
 
     FORBIDDEN_KEYS = ("text", "prompt", "transcription", "llm_response", "vocabulary", "token")
+    SENSITIVE_PREFIXES = (
+        "adjusted text:",
+        "result text:",
+        "transcription:",
+        "transcribed:",
+        "raw text:",
+        "user speech:",
+        " ' -> '",
+        ' " -> "',
+    )
 
     def filter(self, record: logging.LogRecord) -> bool:
         # Sanitize full formatted message to prevent leaks slipping through record.args
@@ -33,11 +43,20 @@ class PIISafeFilter(logging.Filter):
         except Exception:
             full_msg = str(record.msg).lower()
 
+        # 1. Catch dictionary representations: "text": or 'text': or text: '...'
         for key in self.FORBIDDEN_KEYS:
-            if f'"{key}":' in full_msg or f"'{key}':" in full_msg or f"'{key}' ->" in full_msg:
+            if f'"{key}":' in full_msg or f"'{key}':" in full_msg or f"{key}: '" in full_msg or f'{key}: "' in full_msg:
                 record.msg = "[REDACTED_PII_PAYLOAD]"
                 record.args = ()
-                break
+                return True
+
+        # 2. Catch sensitive speech leak patterns
+        for prefix in self.SENSITIVE_PREFIXES:
+            if prefix in full_msg:
+                record.msg = "[REDACTED_PII_PAYLOAD]"
+                record.args = ()
+                return True
+
         return True
 
 

@@ -161,7 +161,7 @@ class MorocoVoiceApplication:
             audio_buffer = self.recorder.stop()
             if self.vad and not self.recorder.has_detected_speech():
                 logger.info("VAD detected zero speech during recording. Suppressing transcription.")
-                self.hud.hide()
+                self.root.after(0, self.hud.hide)
                 return
 
             self._dispatch_hud(AppState.PROCESSING, "Procesando audio...")
