@@ -50,3 +50,30 @@ def test_is_valid_groq_api_key():
     # Valid key format
     assert is_valid_groq_api_key("gsk_1234567890abcdefghijklmnopqrstuvwxyz")
 
+
+def test_verify_groq_api_key_online_mocked():
+    """Verify verify_groq_api_key_online handles valid and unauthorized keys."""
+    from unittest.mock import MagicMock, patch
+
+    from app.ui.settings_window import verify_groq_api_key_online
+
+    # Case 1: Successful check
+    with patch("groq.Groq") as mock_groq_class:
+        mock_instance = MagicMock()
+        mock_groq_class.return_value = mock_instance
+        mock_instance.models.list.return_value = ["model1"]
+
+        valid, msg = verify_groq_api_key_online("gsk_validkey")
+        assert valid is True
+        assert "válida" in msg
+
+    # Case 2: Unauthorized (401)
+    with patch("groq.Groq") as mock_groq_class:
+        mock_instance = MagicMock()
+        mock_groq_class.return_value = mock_instance
+        mock_instance.models.list.side_effect = Exception("Error code: 401 - {'error': {'message': 'Invalid API Key'}}")
+
+        valid, msg = verify_groq_api_key_online("gsk_invalidkey")
+        assert valid is False
+        assert "401" in msg or "inválida" in msg
+

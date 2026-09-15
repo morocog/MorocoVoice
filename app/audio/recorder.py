@@ -31,14 +31,18 @@ class AudioRecorder:
         sample_rate: int = SAMPLE_RATE,
         block_size: int = BLOCK_SIZE,
         max_duration_seconds: float = 60.0,
+        silence_cutoff_seconds: float = 1.2,
         vad: VoiceActivityDetector | None = None,
         on_max_duration_reached: Callable[[], None] | None = None,
+        on_silence_cutoff: Callable[[], None] | None = None,
     ) -> None:
         self.sample_rate = sample_rate
         self.block_size = block_size
         self.max_duration_seconds = max_duration_seconds
+        self.silence_cutoff_seconds = silence_cutoff_seconds
         self.vad = vad
         self.on_max_duration_reached = on_max_duration_reached
+        self.on_silence_cutoff = on_silence_cutoff
 
         self._stream: sd.InputStream | None = None
         self._frames: list[np.ndarray] = []
@@ -47,6 +51,7 @@ class AudioRecorder:
         self._start_time = 0.0
         self._total_chunks_count = 0
         self._speech_chunks_count = 0
+        self._consecutive_silence_chunks = 0
 
     def start(self) -> None:
         """Start non-blocking audio capture stream."""
@@ -58,6 +63,7 @@ class AudioRecorder:
             self._frames.clear()
             self._total_chunks_count = 0
             self._speech_chunks_count = 0
+            self._consecutive_silence_chunks = 0
             self._is_recording = True
             self._start_time = time.perf_counter()
 
@@ -102,6 +108,23 @@ class AudioRecorder:
             self._total_chunks_count += 1
             if is_speech:
                 self._speech_chunks_count += 1
+                self._consecutive_silence_chunks = 0
+            else:
+                # Count silence chunks only after speech was detected at least once
+                if self._speech_chunks_count > 0:
+                    self._consecutive_silence_chunks += 1
+                    chunk_duration = self.block_size / self.sample_rate
+                    silence_elapsed = self._consecutive_silence_chunks * chunk_duration
+                    if self.silence_cutoff_seconds > 0 and silence_elapsed >= self.silence_cutoff_seconds:
+                        logger.info(
+                            "VAD silence cutoff reached (%.2f s silence after speech). Triggering auto-cutoff.",
+                            silence_elapsed,
+                        )
+                        self._is_recording = False
+                        target_cb = self.on_silence_cutoff or self.on_max_duration_reached
+                        if target_cb:
+                            threading.Thread(target=target_cb, daemon=True).start()
+                        return
 
             # Auto cutoff protection (max 60 seconds)
             elapsed = time.perf_counter() - self._start_time

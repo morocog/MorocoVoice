@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-v1.0.1-22c55e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.0.2-22c55e?style=for-the-badge)
 ![Windows 10/11](https://img.shields.io/badge/OS-Windows%2010%20%7C%2011%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Zero PyTorch](https://img.shields.io/badge/Architecture-Zero%20PyTorch%20(%3C450MB)-10b981?style=for-the-badge)
@@ -100,7 +100,7 @@ MorocoVoice ofrece arquitectura dual según tus necesidades de conectividad o pr
 
 - **Enmascaramiento de Credenciales Anti-Shoulder Surfing:** La API Key se muestra como asteriscos en la UI y se almacena localmente en el archivo `.env`, el cual está estrictamente excluido por `.gitignore`.
 - **Logs Libres de PII (Privacy by Design):** El sistema de logging estructurado (`app/logging_setup.py`) tiene un filtro activo que **prohíbe tajantemente registrar transcripciones crudas, prompts o textos de usuario**. Solo se auditan tiempos de latencia y nombres de procesos activos.
-- **Inyección por Fases no Destructiva:** `app/platform/injector.py` utiliza `SendInput` con liberación de modificadores residuales y respaldo del portapapeles original con bloqueo reentrante (`threading.RLock`), restaurando el contenido previo del usuario a los 120 ms.
+- **Inyección por Fases no Destructiva:** `app/platform/injector.py` utiliza `SendInput` con liberación de modificadores residuales y respaldo del contenido textual Unicode (`CF_UNICODETEXT`) del portapapeles con bloqueo reentrante (`threading.RLock`), restaurando el texto previo del usuario a los 120 ms (formatos no textuales ricos como capas gráficas u objetos OLE no se preservan por diseño de la API Win32).
 - **Compatibilidad UIPI (User Interface Privilege Isolation):** Detecta automáticamente si una ventana destino corre con permisos de Administrador para prevenir fallos silenciosos de inyección en Windows.
 
 ---

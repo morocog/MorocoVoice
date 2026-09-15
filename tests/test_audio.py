@@ -34,3 +34,48 @@ def test_empty_audio_chunk():
     vad = VoiceActivityDetector()
     empty = np.array([], dtype=np.float32)
     assert not vad.is_speech_chunk(empty)
+
+
+def test_audio_recorder_speech_detection_tracking():
+    """Verify AudioRecorder speech chunk tracking and has_detected_speech method."""
+    import time
+    from unittest.mock import MagicMock
+
+    from app.audio.recorder import AudioRecorder
+
+    vad = MagicMock()
+    rec = AudioRecorder(sample_rate=16000, block_size=512, vad=vad, silence_cutoff_seconds=0.5)
+    rec._is_recording = True
+    rec._start_time = time.perf_counter()
+
+    # 1. Feed silence chunk (VAD returns False)
+    vad.is_speech_chunk.return_value = False
+    chunk1 = np.zeros((512, 1), dtype=np.float32)
+    rec._audio_callback(chunk1, 512, None, None)
+    assert not rec.has_detected_speech()
+
+    # 2. Feed speech chunk (VAD returns True)
+    vad.is_speech_chunk.return_value = True
+    chunk2 = np.ones((512, 1), dtype=np.float32)
+    rec._audio_callback(chunk2, 512, None, None)
+    assert rec.has_detected_speech()
+
+
+def test_pii_safe_filter_redacts_formatted_args():
+    """Verify PIISafeFilter redacts messages even when sensitive terms are passed via record.args."""
+    import logging
+
+    from app.logging_setup import PIISafeFilter
+
+    f = PIISafeFilter()
+
+    # Case 1: Raw payload in message string
+    record1 = logging.LogRecord("test", logging.INFO, "path", 10, "Payload: 'transcription': 'secret'", (), None)
+    f.filter(record1)
+    assert record1.msg == "[REDACTED_PII_PAYLOAD]"
+
+    # Case 2: Sensitive payload in record.args
+    record2 = logging.LogRecord("test", logging.INFO, "path", 10, "Result text: '%s' -> '%s'", ("text", "replaced"), None)
+    f.filter(record2)
+    assert record2.msg == "[REDACTED_PII_PAYLOAD]"
+    assert record2.args == ()

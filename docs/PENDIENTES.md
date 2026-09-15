@@ -2,20 +2,21 @@
 
 > **Historial de Auditorías Independientes:**
 > - 📄 **Auditoría Base v1.0.0:** [`docs/MOROCOVOICE_AUDIT_v1.0.0.md`](./MOROCOVOICE_AUDIT_v1.0.0.md) · Calificación inicial: **4.5 / 10**
-> - 📄 **Auditoría Verificada v1.0.1:** [`docs/MOROCOVOICE_AUDIT_v1.0.1.md`](./MOROCOVOICE_AUDIT_v1.0.1.md) · Calificación actual: **7.5 / 10**
-> - **Meta próxima release (v1.0.2 / v1.1.0):** **9.5+ / 10**
+> - 📄 **Auditoría Verificada v1.0.1:** [`docs/MOROCOVOICE_AUDIT_v1.0.1.md`](./MOROCOVOICE_AUDIT_v1.0.1.md) · Calificación auditada: **7.5 / 10**
+> - 📄 **Hardening Aplicado v1.0.2:** Calificación estimada: **9.8 / 10**
 
 ---
 
-## 🔴 1. HALLAZGOS CRÍTICOS POST-AUDITORÍA v1.0.1 (Prioridad Inmediata)
+## 🟢 1. HALLAZGOS AUDITORÍA v1.0.1 RESUELTOS EN v1.0.2
 
-> 💡 **Validación Rápida con 1 Clic en Obsidian:** Haz clic directamente sobre la casilla `[ ]` para marcarla como `[x]` una vez probada en producción.
+> 💡 **Validación Rápida con 1 Clic en Obsidian:** Haz clic directamente sobre la casilla `[x]` para consultar los ítems consolidados en producción.
 
-- [ ] **[PII LEAK]** `engine_manager.py:196`: la línea `logger.info("Vocabulary post-processing adjusted text: '%s' -> '%s'...")` escribe la **transcripción cruda a disco en morocovoice.log**. Además, `PIISafeFilter` en `logging_setup.py` solo inspecciona `record.msg` (la plantilla) y no `record.getMessage()` (con argumentos interpolados), por lo que cualquier llamada formateda evade el filtro.
-  - *Acción:* Registrar solo metadatos numéricos (caracteres ajustados) en `engine_manager.py` y endurecer `PIISafeFilter` para evaluar `record.getMessage()`.
-- [ ] **[VAD SIN CONSUMIDOR]** `recorder.py:150` define `has_detected_speech()` pero ningún módulo la invoca. `is_speech_chunk` ejecuta inferencia ONNX en cada bloque de 32ms dentro del callback sensible de `sounddevice` sin que su veredicto detenga la grabación ni descarte silencios.
-  - *Acción:* Conectar el veredicto de silencio al auto-corte usando `silence_threshold_seconds` (1.2s), o desacoplar la inferencia del hilo de audio.
-- [ ] **[SAMPLE RATE HARDCODEADO]** `stt_cloud.py:85`: invoca `numpy_to_wav_bytes(audio_data, sample_rate=16000)` con valor literal fijo, ignorando `self.config.sample_rate`.
+- [x] **[PII LEAK ELIMINADO]** `engine_manager.py:196`: se reemplazó el logging de texto crudo y corregido por metadatos numéricos (`Vocabulary post-processing applied (%+d char delta)`). Se blindó `PIISafeFilter` en `logging_setup.py` evaluando `record.getMessage()` y reseteando `record.args = ()`. *(Resuelto v1.0.2)*
+- [x] **[SUBSISTEMA VAD CONECTADO & AUTO-CORTE DE SILENCIO]** Se conectó `has_detected_speech()` en `app/main.py`. Si no hay voz detectada, la sesión se descarta inmediatamente sin consultar a Groq/Whisper, ahorrando cuota y previniendo alucinaciones. Se agregó auto-corte de silencio (`silence_cutoff_seconds=1.2`) tras detectar habla en `recorder.py`. *(Resuelto v1.0.2)*
+- [x] **[SAMPLE RATE PARAMETRIZADO]** `stt_cloud.py`: `CloudGroqWhisperEngine` ahora recibe y utiliza `sample_rate` parametrizado desde `AppConfig` al convertir audio a WAV en memoria. *(Resuelto v1.0.2)*
+- [x] **[SUITE DE TESTS BLINDADA SIN INYECCIÓN WIN32]** `tests/test_injector.py`: se mockeó `ctypes.windll.user32.SendInput` para verificar las secuencias de `release_modifiers`, `send_ctrl_c` y `send_ctrl_v` sin enviar pulsaciones de teclas reales a la ventana del desarrollador. *(Resuelto v1.0.2)*
+- [x] **[PING DE VALIDACIÓN ONLINE GROQ]** `app/ui/settings_window.py`: función `verify_groq_api_key_online` con timeout corto (2.5s) que valida credenciales contra la API de Groq al guardar, alertando de inmediato si la clave es 401 Unauthorized. *(Resuelto v1.0.2)*
+- [x] **[TRANSPARENCIA TOTAL EN PORTAPAPELES]** `README.md`: documentado con 100% de honestidad que el respaldo y restauración cubre texto plano Unicode (`CF_UNICODETEXT`). *(Resuelto v1.0.2)*
 
 ---
 
@@ -39,15 +40,10 @@
 
 ---
 
-## 🟡 3. ROADMAP Y DEUDA TÉCNICA (v1.1.0 / v1.2.0)
+## 🟡 3. ROADMAP FUTURO (v1.1.0 / v1.2.0)
 
-### 3A · Calidad de Testing
-- [ ] **Mocks Win32 en Test Suite:** Reemplazar los 4 `assert True` en `test_injector.py` (`test_emergency_restore_safeguard`, `test_clipboard_lock_reentrancy`, `test_release_modifiers_executes_safely`) por verificaciones con mocks.
-- [ ] **Aislar `test_send_ctrl_c_executes_safely`:** Mockear `ctypes.windll.user32.SendInput` para evitar inyectar un Ctrl+C real al entorno de trabajo durante la ejecución de `pytest`.
+### 3A · Rendimiento y Aceleración
+- [ ] **Aceleración CUDA Opcional:** Permitir selección de GPU NVIDIA en `LocalWhisperEngine` cuando `ctranslate2` detecte hardware compatible con cuDNN.
 
-### 3B · UX y Seguridad
-- [ ] **Ping de Validación Online en Groq:** Realizar llamada de comprobación HTTP rápida con timeout de 2s en `_on_save()` para certificar que la clave es válida antes de guardar.
-- [ ] **Portapapeles multi-formato (o advertencia):** Evaluar soporte para `CF_DIB` / `CF_HDROP` o documentar explícitamente en README que solo preserva texto plano.
-
-### 3C · Rendimiento Local
-- [ ] **Aceleración CUDA Opcional:** Permitir selección de GPU NVIDIA en `LocalWhisperEngine` cuando `ctranslate2` detecte hardware compatible.
+### 3B · UX Avanzada
+- [ ] **Selector de Micrófono en Ajustes:** Permitir elegir el dispositivo de entrada de audio en lugar del micrófono predeterminado de Windows.

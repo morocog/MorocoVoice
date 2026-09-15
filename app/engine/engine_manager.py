@@ -147,6 +147,7 @@ class EngineManager:
                 api_key=config.groq_api_key,
                 model=config.groq_stt_model,
                 language=config.stt_language,
+                sample_rate=config.sample_rate,
             )
 
         self.local_engine = LocalWhisperEngine(
@@ -193,7 +194,8 @@ class EngineManager:
         # Path 3: Apply deterministic vocabulary correction
         corrected_text = apply_vocabulary_post_processing(raw_result.text, self.vocabulary_terms)
         if corrected_text != raw_result.text:
-            logger.info("Vocabulary post-processing adjusted text: '%s' -> '%s'", raw_result.text, corrected_text)
+            delta = len(corrected_text) - len(raw_result.text)
+            logger.info("Vocabulary post-processing applied (%+d char delta).", delta)
 
         return dataclasses.replace(raw_result, text=corrected_text)
 

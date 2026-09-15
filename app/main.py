@@ -67,7 +67,9 @@ class MorocoVoiceApplication:
             sample_rate=config.sample_rate,
             vad=self.vad,
             max_duration_seconds=config.max_recording_seconds,
+            silence_cutoff_seconds=config.silence_threshold_seconds,
             on_max_duration_reached=self._on_max_recording_reached,
+            on_silence_cutoff=self._on_silence_cutoff_reached,
         )
         self.engine_mgr = EngineManager(config)
         self.rewriter = SemanticRewriter(config)
@@ -103,6 +105,8 @@ class MorocoVoiceApplication:
     def reload_config(self, new_config: AppConfig) -> None:
         """Live hot reload of runtime configuration without restarting."""
         self.config = new_config
+        self.recorder.max_duration_seconds = new_config.max_recording_seconds
+        self.recorder.silence_cutoff_seconds = new_config.silence_threshold_seconds
         self.hotkeys.update_shortcuts(
             dictation=new_config.hotkey_dictation,
             rewrite=new_config.hotkey_rewrite,
@@ -154,8 +158,13 @@ class MorocoVoiceApplication:
         if self.recorder.is_recording:
             # Stop recording and process
             play_sound_pop()
-            self._dispatch_hud(AppState.PROCESSING, "Procesando audio...")
             audio_buffer = self.recorder.stop()
+            if self.vad and not self.recorder.has_detected_speech():
+                logger.info("VAD detected zero speech during recording. Suppressing transcription.")
+                self.hud.hide()
+                return
+
+            self._dispatch_hud(AppState.PROCESSING, "Procesando audio...")
             self._enqueue_processing(audio_buffer)
         else:
             # Check UIPI elevation of target window before starting
@@ -176,10 +185,28 @@ class MorocoVoiceApplication:
 
     def _on_max_recording_reached(self) -> None:
         """Callback when recording hits 60s hard limit."""
-        logger.info("Auto-cutoff reached. Stopping recording.")
+        logger.info("Auto-cutoff reached (max duration limit). Stopping recording.")
         play_sound_pop()
-        self._dispatch_hud(AppState.PROCESSING, "Procesando (60s límite)...")
         audio_buffer = self.recorder.stop()
+        if self.vad and not self.recorder.has_detected_speech():
+            logger.info("No speech detected at max duration. Suppressing transcription.")
+            self.root.after(0, self.hud.hide)
+            return
+
+        self._dispatch_hud(AppState.PROCESSING, "Procesando (60s límite)...")
+        self._enqueue_processing(audio_buffer)
+
+    def _on_silence_cutoff_reached(self) -> None:
+        """Callback when VAD detects silence_threshold_seconds of silence after speech."""
+        logger.info("VAD silence cutoff reached. Auto-stopping recording.")
+        play_sound_pop()
+        audio_buffer = self.recorder.stop()
+        if self.vad and not self.recorder.has_detected_speech():
+            logger.info("No speech detected on silence cutoff. Suppressing transcription.")
+            self.root.after(0, self.hud.hide)
+            return
+
+        self._dispatch_hud(AppState.PROCESSING, "Procesando...")
         self._enqueue_processing(audio_buffer)
 
     def _enqueue_processing(self, audio_buffer) -> None:

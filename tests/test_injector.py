@@ -48,18 +48,41 @@ def test_clipboard_lock_reentrancy():
 
 
 def test_release_modifiers_executes_safely():
-    """Verify release_modifiers executes without raising Win32 exceptions."""
+    """Verify release_modifiers calls SendInput with keyup events for modifier keys without live keystroke injection."""
+    from unittest.mock import patch
+
     from app.platform.injector import release_modifiers
 
-    release_modifiers()
-    assert True
+    with patch("ctypes.windll.user32.SendInput") as mock_send_input:
+        mock_send_input.return_value = 1
+        release_modifiers()
+        assert mock_send_input.called
+        assert mock_send_input.call_count >= 1
 
 
 def test_send_ctrl_c_executes_safely():
-    """Verify send_ctrl_c releases modifiers and executes without Win32 exceptions."""
+    """Verify send_ctrl_c releases modifiers and synthesizes Ctrl+C sequence via SendInput safely."""
+    from unittest.mock import patch
+
     from app.platform.injector import send_ctrl_c
 
-    send_ctrl_c()
-    assert True
+    with patch("ctypes.windll.user32.SendInput") as mock_send_input:
+        mock_send_input.return_value = 1
+        send_ctrl_c()
+        assert mock_send_input.called
+        assert mock_send_input.call_count >= 3
+
+
+def test_send_ctrl_v_executes_safely():
+    """Verify send_ctrl_v releases modifiers and synthesizes Ctrl+V sequence via SendInput safely."""
+    from unittest.mock import patch
+
+    from app.platform.injector import send_ctrl_v
+
+    with patch("ctypes.windll.user32.SendInput") as mock_send_input:
+        mock_send_input.return_value = 1
+        send_ctrl_v()
+        assert mock_send_input.called
+        assert mock_send_input.call_count >= 3
 
 

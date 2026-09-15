@@ -27,11 +27,16 @@ class PIISafeFilter(logging.Filter):
     FORBIDDEN_KEYS = ("text", "prompt", "transcription", "llm_response", "vocabulary", "token")
 
     def filter(self, record: logging.LogRecord) -> bool:
-        # Sanitize message string if accidental dict or raw payload is passed
-        msg = str(record.msg).lower()
+        # Sanitize full formatted message to prevent leaks slipping through record.args
+        try:
+            full_msg = record.getMessage().lower()
+        except Exception:
+            full_msg = str(record.msg).lower()
+
         for key in self.FORBIDDEN_KEYS:
-            if f'"{key}":' in msg or f"'{key}':" in msg:
+            if f'"{key}":' in full_msg or f"'{key}':" in full_msg or f"'{key}' ->" in full_msg:
                 record.msg = "[REDACTED_PII_PAYLOAD]"
+                record.args = ()
                 break
         return True
 

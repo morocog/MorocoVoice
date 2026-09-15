@@ -56,10 +56,17 @@ def numpy_to_wav_bytes(audio_data: np.ndarray, sample_rate: int = 16000) -> byte
 class CloudGroqWhisperEngine:
     """Cloud STT engine backed by Groq whisper-large-v3."""
 
-    def __init__(self, api_key: str, model: str = "whisper-large-v3", language: str = "es") -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str = "whisper-large-v3",
+        language: str = "es",
+        sample_rate: int = 16000,
+    ) -> None:
         self.api_key = api_key
         self.model = model
         self.language = language
+        self.sample_rate = sample_rate
         self._client: Groq | None = None
 
     def _get_client(self) -> Groq:
@@ -82,7 +89,7 @@ class CloudGroqWhisperEngine:
         t0 = time.perf_counter()
         try:
             client = self._get_client()
-            wav_bytes = numpy_to_wav_bytes(audio_data, sample_rate=16000)
+            wav_bytes = numpy_to_wav_bytes(audio_data, sample_rate=self.sample_rate)
             audio_file = ("audio.wav", wav_bytes)
 
             kwargs = {

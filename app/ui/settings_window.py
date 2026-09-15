@@ -87,6 +87,22 @@ def _persist_groq_api_key_to_env(env_path: Path, api_key: str) -> None:
         logger.error("Failed to write GROQ_API_KEY to %s: %s", env_path, e)
 
 
+def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool, str]:
+    """Verify Groq API key by attempting to fetch model list with short timeout."""
+    try:
+        from groq import Groq
+        client = Groq(api_key=api_key, timeout=timeout)
+        client.models.list()
+        return True, "Clave válida y autorizada."
+    except Exception as e:
+        err_msg = str(e)
+        if "401" in err_msg or "invalid_api_key" in err_msg.lower() or "unauthorized" in err_msg.lower():
+            return False, "La clave de Groq es inválida o fue revocada (Error 401: Unauthorized)."
+        elif "connection" in err_msg.lower() or "timeout" in err_msg.lower():
+            return True, "No se pudo verificar la conexión con Groq (sin internet o timeout), pero la clave fue guardada."
+        return False, f"Error al verificar la clave de Groq: {e}"
+
+
 class SettingsModal:
     """Modern dark-themed Tkinter settings modal with Telat executive styling and tabs."""
 
@@ -699,6 +715,16 @@ class SettingsModal:
                     self.var_engine.set("LOCAL")
                 else:
                     return
+            elif engine_type == AudioEngineType.CLOUD and not is_placeholder:
+                is_valid, auth_msg = verify_groq_api_key_online(groq_key_val, timeout=2.5)
+                if not is_valid:
+                    warn_msg = (
+                        f"La clave de Groq no superó la verificación en línea:\n\n"
+                        f"{auth_msg}\n\n"
+                        "¿Deseas guardarla de todas formas (por ejemplo si estás sin conexión)?"
+                    )
+                    if not messagebox.askyesno("Verificación de Groq Fallida", warn_msg, parent=self.window):
+                        return
 
             # Validate vocabulary terms
             terms = self._get_current_terms_from_ui()
