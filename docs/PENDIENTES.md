@@ -1,70 +1,53 @@
 # PENDIENTES — MorocoVoice
 
-> Generado tras la Auditoría de Trazabilidad DSH · commit `8bd0ae9` · 2026-09-14
-> Fuente canónica: [`docs/MOROCOVOICE_AUDIT_v1.0.0.md`](./MOROCOVOICE_AUDIT_v1.0.0.md)
-> Calificación de lanzamiento actual: **4.5 / 10**
+> **Historial de Auditorías Independientes:**
+> - 📄 **Auditoría Base v1.0.0:** [`docs/MOROCOVOICE_AUDIT_v1.0.0.md`](./MOROCOVOICE_AUDIT_v1.0.0.md) · Calificación inicial: **4.5 / 10**
+> - 📄 **Auditoría Verificada v1.0.1:** [`docs/MOROCOVOICE_AUDIT_v1.0.1.md`](./MOROCOVOICE_AUDIT_v1.0.1.md) · Calificación actual: **7.5 / 10**
+> - **Meta próxima release (v1.0.2 / v1.1.0):** **9.5+ / 10**
 
 ---
 
-## 🔴 1. VERIFICACIONES PENDIENTES EN CALIENTE (críticas, antes de que alguien lo use)
+## 🔴 1. HALLAZGOS CRÍTICOS POST-AUDITORÍA v1.0.1 (Prioridad Inmediata)
 
 > 💡 **Validación Rápida con 1 Clic en Obsidian:** Haz clic directamente sobre la casilla `[ ]` para marcarla como `[x]` una vez probada en producción.
 
-- [x] **[BUG BLOQUEANTE #1]** Cambiar `config.json` línea 6: modelo LLM `llama-3.1-8b-instant` reemplazó al inexistente qwen. *(Resuelto v1.0.1)*
+- [ ] **[PII LEAK]** `engine_manager.py:196`: la línea `logger.info("Vocabulary post-processing adjusted text: '%s' -> '%s'...")` escribe la **transcripción cruda a disco en morocovoice.log**. Además, `PIISafeFilter` en `logging_setup.py` solo inspecciona `record.msg` (la plantilla) y no `record.getMessage()` (con argumentos interpolados), por lo que cualquier llamada formateda evade el filtro.
+  - *Acción:* Registrar solo metadatos numéricos (caracteres ajustados) en `engine_manager.py` y endurecer `PIISafeFilter` para evaluar `record.getMessage()`.
+- [ ] **[VAD SIN CONSUMIDOR]** `recorder.py:150` define `has_detected_speech()` pero ningún módulo la invoca. `is_speech_chunk` ejecuta inferencia ONNX en cada bloque de 32ms dentro del callback sensible de `sounddevice` sin que su veredicto detenga la grabación ni descarte silencios.
+  - *Acción:* Conectar el veredicto de silencio al auto-corte usando `silence_threshold_seconds` (1.2s), o desacoplar la inferencia del hilo de audio.
+- [ ] **[SAMPLE RATE HARDCODEADO]** `stt_cloud.py:85`: invoca `numpy_to_wav_bytes(audio_data, sample_rate=16000)` con valor literal fijo, ignorando `self.config.sample_rate`.
+
+---
+
+## 🟢 2. BLOQUEANTES DE v1.0.0 YA RESUELTOS EN v1.0.1
+
+- [x] **[BUG BLOQUEANTE #1]** Cambiar modelo LLM a `llama-3.1-8b-instant` en `contracts.py`, `config.example.json` y settings. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #2]** Publicada la versión `v1.0.1` desde `main` con nuevo tag anotado `v1.0.1`. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #3]** `logging_setup.py:90` namespace `"morocovoice.{name}"` corregido, filtro PII y rotación activa. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #4]** Python 3.11+ unificado en `pyproject.toml`, badge, README y `run.bat` con validación estricta al arranque. *(Resuelto v1.0.1)*
 - [x] **[BUG BLOQUEANTE #5]** Placeholder de `.env` (`gsk_tu_clave_de_groq_aqui`) detectado y filtrado tanto en carga como en `settings_window.py` con advertencia al usuario. *(Resuelto v1.0.1)*
-- [x] **[BUG BLOQUEANTE #6]** *Mantenido por decisión explícita de Ricardo García*: el portapapeles actual funciona bien en el día a día y se preserva intacto.
+- [x] **[BUG BLOQUEANTE #6]** *Mantenido por decisión explícita de Ricardo García*: el portapapeles actual (`CF_UNICODETEXT`) se preserva intacto por ser funcional para texto en el día a día.
 - [x] **[BUG #7]** *Mantenido por decisión explícita de Ricardo García*: el atajo `Win + Space` se conserva como atajo principal de dictado.
 - [x] **[BUG #8]** HUD translúcida activada con `attributes("-alpha", 0.92)`. *(Resuelto v1.0.1)*
-- [x] **[BUG #9]** VAD Silero ONNX activado en tiempo real en `_audio_callback` de `recorder.py` con método `has_detected_speech()`. *(Resuelto v1.0.1)*
+- [x] **[BUG #9]** VAD Silero ONNX ejecutado en tiempo real en `_audio_callback` de `recorder.py`. *(Resuelto v1.0.1)*
 - [x] **[BUG #10]** `max_tokens` dinámico en `rewriter.py` para evitar truncamientos de selección larga. *(Resuelto v1.0.1)*
 - [x] **[BUG #11]** `stt_language` parametrizado en `AppConfig`, `config.example.json`, selector en UI y motores STT cloud y local. *(Resuelto v1.0.1)*
 - [x] **[BUG #12]** `config.json` añadido a `.gitignore` y generado automáticamente desde `config.example.json` en `run.bat`. *(Resuelto v1.0.1)*
+- [x] **[VOCABULARIO UI & DIFflib]** Pestaña con `tk.Text`, contador `n/30` dinámico, eliminación de jerga privada y corrector fonético `difflib` sin falsos positivos en español. *(Resuelto v1.0.1)*
+- [x] **[REBRANDING COMPLETO]** Prompts de LLM, HUD, User-Agent, banners de instalación y alias de excepciones saneados. *(Resuelto v1.0.1)*
+- [x] **[CI GITHUB ACTIONS]** Pipeline de `.github/workflows/ci.yml` con `ruff` y `pytest` en Windows Python 3.11. *(Resuelto v1.0.1)*
 
 ---
 
-## 🟡 2. MEJORAS FUTURAS — ROADMAP v1.1
+## 🟡 3. ROADMAP Y DEUDA TÉCNICA (v1.1.0 / v1.2.0)
 
-### 2A · Vocabulario personalizado (prioridad máxima tras los bloqueantes)
-- [x] Pestaña **"Vocabulario Personalizado"** en la ventana de Configuración (`settings_window.py`) con editor multilínea, contador `n/30` dinámico con semáforo y confirmación antes de truncar. *(Resuelto v1.0.1)*
-- [x] **Sustituir el vocabulario por defecto**: eliminada jerga privada del autor y poblada con 30 términos estándar de tecnología y WFM. *(Resuelto v1.0.1)*
-- [x] **Post-proceso correctivo determinista**: `difflib.SequenceMatcher` y homófonos duros en `engine_manager.py` (corrige `gitcop -> GitHub`, `github -> GitHub`, etc.). *(Resuelto v1.0.1)*
-- [x] Documentar en README (Paso 4: "Enséñale tus palabras y jerga técnica") el funcionamiento del vocabulario y su corrector. *(Resuelto v1.0.1)*
+### 3A · Calidad de Testing
+- [ ] **Mocks Win32 en Test Suite:** Reemplazar los 4 `assert True` en `test_injector.py` (`test_emergency_restore_safeguard`, `test_clipboard_lock_reentrancy`, `test_release_modifiers_executes_safely`) por verificaciones con mocks.
+- [ ] **Aislar `test_send_ctrl_c_executes_safely`:** Mockear `ctypes.windll.user32.SendInput` para evitar inyectar un Ctrl+C real al entorno de trabajo durante la ejecución de `pytest`.
 
-### 2B · Rebranding completo a MorocoVoice
-- [x] `hud.py:109` — texto visible cambiado a `"MorocoVoice"`. *(Resuelto v1.0.1)*
-- [x] `prompt_templates.py:32,39` — prompts del sistema actualizados a MorocoVoice. *(Resuelto v1.0.1)*
-- [x] `vad.py:89` — User-Agent actualizado a `MorocoVoice-Bootstrap/1.0.1`. *(Resuelto v1.0.1)*
-- [x] `verify_install.py:205` — banner actualizado a `MOROCOVOICE v1.0.1`. *(Resuelto v1.0.1)*
-- [x] `logging_setup.py:99` — namespace canónico `morocovoice`. *(Resuelto v1.0.1)*
-- [x] Clases: `MorocoVoiceException` creada con alias de retrocompatibilidad `VoiceFlowException`. *(Resuelto v1.0.1)*
+### 3B · UX y Seguridad
+- [ ] **Ping de Validación Online en Groq:** Realizar llamada de comprobación HTTP rápida con timeout de 2s en `_on_save()` para certificar que la clave es válida antes de guardar.
+- [ ] **Portapapeles multi-formato (o advertencia):** Evaluar soporte para `CF_DIB` / `CF_HDROP` o documentar explícitamente en README que solo preserva texto plano.
 
-### 2C · Experiencia no técnica
-- [x] Instrucciones de instalación sin terminal con enlace a "Download ZIP" en README. *(Resuelto v1.0.1)*
-- [x] Detección de claves inválidas/placeholders con diálogo interactivo en `_on_save`. *(Resuelto v1.0.1)*
-- [x] `run.bat`: detección explícita de Python 3.11+ y copia de `config.example.json`. *(Resuelto v1.0.1)*
-- [x] Apertura de ventana de configuración solo si no hay clave válida configurada. *(Resuelto v1.0.1)*
-- [x] Renderizado de `help_text` inline debajo de cada campo en `SettingsModal`. *(Resuelto v1.0.1)*
-- [x] Timeout de 15.0 segundos en llamadas STT y LLM a Groq. *(Resuelto v1.0.1)*
-- [x] Validación de atajos de teclado no vacíos en `_on_save`. *(Resuelto v1.0.1)*
-
-### 2D · Integridad y confianza
-- [x] `verify_install.py` actualizado a MorocoVoice v1.0.1. *(Resuelto v1.0.1)*
-- [x] GitHub Actions CI implementado en `.github/workflows/ci.yml` (ruff + pytest en Python 3.11 Windows). *(Resuelto v1.0.1)*
-- [x] `requirements.txt` saneado: eliminado `requests` no utilizado, añadido `pytest>=8.0.0`. *(Resuelto v1.0.1)*
-- [x] `config.json` excluido en `.gitignore` y sincronizado en `config.example.json`. *(Resuelto v1.0.1)*
-
----
-
-## 🔵 3. DEUDA TÉCNICA CONOCIDA
-
-- **Tests sin aserciones reales** (~8/26): `test_emergency_restore_safeguard`, `test_clipboard_lock_reentrancy`, `test_release_modifiers_executes_safely`, `test_send_ctrl_c_executes_safely` → todos `assert True`. `test_send_ctrl_c_executes_safely` inyecta Ctrl+C real al sistema durante tests.
-- **Cobertura cero** de rutas críticas: `inject_text()`, restauración asíncrona del portapapeles, `get_selected_text()`, `numpy_to_wav_bytes()`, `load_config()`/`.env`, `recorder.py`, `_on_save()`, HUD y bandeja.
-- **Race condition en portapapeles**: dos inyecciones seguidas sobrescriben `_active_backup_text` mientras el primer hilo de restauración está pendiente.
-- **`get_selected_text()` con `time.sleep(0.12)` fijo**: en Outlook/Teams lentos el portapapeles aún está vacío.
-- **`numpy_to_wav_bytes(sample_rate=16000)` hardcodeado** ignorando `config.sample_rate`.
-- **`trigger_diagnostics` / `hotkey_shutdown` / `hotkey_diagnostics`** en código, eliminados por `_on_save` → código medio muerto.
-- **GPU/CUDA**: `verify_install.py` recomienda tiers por VRAM pero `engine_manager.py:80` fija `device="cpu"` siempre.
-- **`contracts.py:81` default `"alt+space"`** vs `config.json` `"win+space"` → borrar `config.json` cambia el atajo silenciosamente.
+### 3C · Rendimiento Local
+- [ ] **Aceleración CUDA Opcional:** Permitir selección de GPU NVIDIA en `LocalWhisperEngine` cuando `ctranslate2` detecte hardware compatible.
