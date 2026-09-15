@@ -101,3 +101,15 @@ def test_pii_safe_filter_redacts_formatted_args():
     f.filter(record3)
     assert record3.msg == "[REDACTED_PII_PAYLOAD]"
     assert record3.args == ()
+
+
+def test_vad_context_continuity():
+    """Verify that Silero VAD updates and maintains the 64-sample context buffer."""
+    vad = VoiceActivityDetector()
+    assert vad._context.shape == (1, 64)
+    chunk = np.random.randn(512).astype(np.float32) * 0.01
+    vad.is_speech_chunk(chunk)
+    assert vad._context.shape == (1, 64)
+    vad.reset()
+    assert np.all(vad._context == 0.0)
+

@@ -6,6 +6,7 @@ Operates in fast-path (direct raw text) if LLM is offline or during Level 2 back
 from __future__ import annotations
 
 import json
+import re
 import threading
 import time
 import urllib.error
@@ -23,6 +24,13 @@ from app.llm.prompt_templates import (
 from app.logging_setup import get_logger
 
 logger = get_logger("rewriter")
+
+
+def _clean_llm_response(text: str) -> str:
+    """Remove reasoning/thought tags (<think>...</think>) if produced by reasoning models."""
+    if "<think>" in text:
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    return text.strip()
 
 
 class SemanticRewriter:
@@ -140,7 +148,7 @@ class SemanticRewriter:
             )
 
     def _call_llm(self, system_prompt: str, user_prompt: str) -> str | None:
-        """Execute inference against Groq or Ollama."""
+        """Execute inference against Groq or Ollama with automatic model fallback."""
         # 1. Groq Cloud
         if self.groq_api_key:
             try:
@@ -150,19 +158,42 @@ class SemanticRewriter:
                 prompt_words = len(user_prompt.split())
                 dynamic_max_tokens = min(2048, max(500, int(prompt_words * 2.5)))
 
-                resp = self._groq_client.chat.completions.create(
-                    model=self.groq_model,
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    temperature=0.2,
-                    max_tokens=dynamic_max_tokens,
-                )
-                choice = resp.choices[0].message.content
-                return choice.strip() if choice else None
+                # Candidate fallback models if configured model is decommissioned or returns 404/400
+                models_to_try = [self.groq_model]
+                for fallback_m in ["qwen/qwen3.8-27b", "groq/compound-mini", "qwen/qwen3.6-27b"]:
+                    if fallback_m not in models_to_try:
+                        models_to_try.append(fallback_m)
+
+                for attempt_model in models_to_try:
+                    try:
+                        resp = self._groq_client.chat.completions.create(
+                            model=attempt_model,
+                            messages=[
+                                {"role": "system", "content": system_prompt},
+                                {"role": "user", "content": user_prompt},
+                            ],
+                            temperature=0.2,
+                            max_tokens=dynamic_max_tokens,
+                        )
+                        raw_choice = resp.choices[0].message.content or ""
+                        cleaned_choice = _clean_llm_response(raw_choice)
+                        if cleaned_choice:
+                            if attempt_model != self.groq_model:
+                                logger.info("Groq fallback model '%s' succeeded.", attempt_model)
+                            return cleaned_choice
+                    except Exception as model_err:
+                        err_str = str(model_err)
+                        if "404" in err_str or "model_not_found" in err_str or "decommissioned" in err_str:
+                            logger.warning(
+                                "Groq model '%s' unavailable (%s). Trying fallback model...",
+                                attempt_model,
+                                err_str,
+                            )
+                            continue
+                        logger.warning("Groq LLM call failed for '%s': %s", attempt_model, model_err)
+                        break
             except Exception as e:
-                logger.warning("Groq LLM call failed: %s", e)
+                logger.warning("Groq LLM client error: %s", e)
 
         # 2. Local Ollama
         if self._ollama_online:

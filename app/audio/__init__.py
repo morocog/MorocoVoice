@@ -1,2 +1,2 @@
-"""VoiceFlow-Win Audio Subsystem (Capture & VAD)."""
-__version__ = "0.1.0"
+"""MorocoVoice Audio Subsystem (Capture & VAD)."""
+__version__ = "1.0.4"

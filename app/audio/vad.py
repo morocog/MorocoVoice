@@ -1,4 +1,4 @@
-"""Voice Activity Detection (VAD) subsystem for VoiceFlow-Win.
+"""Voice Activity Detection (VAD) subsystem for MorocoVoice.
 
 STRICT CONTRACT: ZERO PYTORCH.
 Uses onnxruntime to execute silero_vad.onnx with automatic failover to
@@ -104,7 +104,7 @@ class VoiceActivityDetector:
         logger.error("Could not download silero_vad.onnx from any candidate repository.")
 
     def reset(self) -> None:
-        """Reset internal recurrent state tensors."""
+        """Reset internal recurrent state and context tensors."""
         self._state = np.zeros((2, 1, 128), dtype=np.float32)
         self._context = np.zeros((1, 64), dtype=np.float32)
 
@@ -130,9 +130,13 @@ class VoiceActivityDetector:
                 chunk_input = np.expand_dims(chunk, axis=0)  # Shape: (1, 512)
                 sr_input = np.array(self.sample_rate, dtype=np.int64)
 
+                # Prepend 64 context samples for Silero VAD v5
+                x = np.concatenate([self._context, chunk_input], axis=1)  # Shape: (1, 576)
+                self._context = chunk_input[:, -64:]
+
                 # Check model input names
                 input_names = [inp.name for inp in self._session.get_inputs()]
-                inputs: dict[str, np.ndarray] = {input_names[0]: chunk_input}
+                inputs: dict[str, np.ndarray] = {input_names[0]: x}
 
                 if "sr" in input_names:
                     inputs["sr"] = sr_input

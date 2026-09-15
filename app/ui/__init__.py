@@ -1,2 +1,2 @@
-"""VoiceFlow-Win UI Subsystem (HUD & System Tray)."""
-__version__ = "0.1.0"
+"""MorocoVoice UI Subsystem (HUD & System Tray)."""
+__version__ = "1.0.4"

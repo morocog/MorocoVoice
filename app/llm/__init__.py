@@ -1,2 +1,2 @@
-"""VoiceFlow-Win LLM & Context Subsystem."""
-__version__ = "0.1.0"
+"""MorocoVoice LLM & Context Subsystem."""
+__version__ = "1.0.4"

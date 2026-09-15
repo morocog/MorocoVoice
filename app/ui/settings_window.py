@@ -138,8 +138,9 @@ class SettingsModal:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("MorocoVoice - Configuración")
-        self.window.geometry("580x640")
-        self.window.resizable(False, False)
+        self.window.geometry("640x750")
+        self.window.minsize(600, 700)
+        self.window.resizable(True, True)
         self.window.configure(bg="#18181b")
 
         # Keep on top of other windows
@@ -156,8 +157,8 @@ class SettingsModal:
     def _center_window(self) -> None:
         """Center the modal on the current screen."""
         self.window.update_idletasks()
-        w = 580
-        h = 640
+        w = 640
+        h = 750
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
         x = max(0, (sw - w) // 2)
@@ -166,29 +167,84 @@ class SettingsModal:
 
     def _build_ui(self) -> None:
         """Build the tabbed modal interface."""
-        # Top banner
-        banner = tk.Frame(self.window, bg="#27272a", height=56)
-        banner.pack(fill=tk.X)
+        # 1. Top banner
+        banner = tk.Frame(self.window, bg="#202023", height=56)
+        banner.pack(fill=tk.X, side=tk.TOP)
 
         title_lbl = tk.Label(
             banner,
             text="⚙️ Configuración de MorocoVoice",
             font=("Segoe UI", 12, "bold"),
             fg="#FBFBFD",
-            bg="#27272a",
+            bg="#202023",
         )
-        title_lbl.pack(side=tk.LEFT, padx=18, pady=14)
+        title_lbl.pack(side=tk.LEFT, padx=20, pady=14)
 
         subtitle_lbl = tk.Label(
             banner,
-            text="v1.0.3",
+            text="v1.0.4",
             font=("Segoe UI", 9, "bold"),
             fg="#FECA66",
-            bg="#27272a",
+            bg="#202023",
         )
-        subtitle_lbl.pack(side=tk.RIGHT, padx=18, pady=16)
+        subtitle_lbl.pack(side=tk.RIGHT, padx=20, pady=16)
 
-        # Style notebook
+        # 2. Bottom action buttons bar (Packed BEFORE notebook to guarantee zero overflow)
+        sep_bar = tk.Frame(self.window, bg="#3f3f46", height=1)
+        sep_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_bar = tk.Frame(self.window, bg="#202023", height=62)
+        btn_bar.pack(fill=tk.X, side=tk.BOTTOM)
+
+        btn_open_json = tk.Button(
+            btn_bar,
+            text="📄 Editar config.json",
+            font=("Segoe UI", 9),
+            bg="#2a2a2e",
+            fg="#a1a1aa",
+            activebackground="#3f3f46",
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=12,
+            pady=7,
+            command=self._on_open_json,
+        )
+        btn_open_json.pack(side=tk.LEFT, padx=18, pady=12)
+
+        btn_cancel = tk.Button(
+            btn_bar,
+            text="Minimizar (Esc)",
+            font=("Segoe UI", 9),
+            bg="#3f3f46",
+            fg="#FBFBFD",
+            activebackground="#52525b",
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=14,
+            pady=7,
+            command=self._on_cancel,
+        )
+        btn_cancel.pack(side=tk.RIGHT, padx=(6, 18), pady=12)
+
+        btn_save = tk.Button(
+            btn_bar,
+            text="💾 Guardar y Aplicar",
+            font=("Segoe UI", 9, "bold"),
+            bg="#3284C6",
+            fg="#FFFFFF",
+            activebackground="#2563eb",
+            activeforeground="#FFFFFF",
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=18,
+            pady=7,
+            command=self._on_save,
+        )
+        btn_save.pack(side=tk.RIGHT, padx=6, pady=12)
+
+        # 3. Styling for ttk Notebook and Combobox
         style = ttk.Style()
         style.theme_use("default")
         style.configure("TNotebook", background="#18181b", borderwidth=0)
@@ -196,7 +252,7 @@ class SettingsModal:
             "TNotebook.Tab",
             background="#27272a",
             foreground="#FBFBFD",
-            padding=[14, 6],
+            padding=[16, 8],
             font=("Segoe UI", 9, "bold"),
             borderwidth=0,
         )
@@ -205,67 +261,36 @@ class SettingsModal:
             background=[("selected", "#3284C6"), ("active", "#3f3f46")],
             foreground=[("selected", "#FFFFFF"), ("active", "#FFFFFF")],
         )
+        style.configure(
+            "TCombobox",
+            background="#27272a",
+            foreground="#FBFBFD",
+            fieldbackground="#27272a",
+            darkcolor="#3f3f46",
+            lightcolor="#3f3f46",
+            arrowcolor="#FBFBFD",
+            padding=[6, 4],
+        )
+        style.map(
+            "TCombobox",
+            fieldbackground=[("readonly", "#27272a")],
+            foreground=[("readonly", "#FBFBFD")],
+            selectbackground=[("readonly", "#3284C6")],
+            selectforeground=[("readonly", "#FFFFFF")],
+        )
 
+        # 4. Central Notebook area (fills all space between top banner and bottom bar)
         notebook = ttk.Notebook(self.window)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=14, pady=(8, 0))
+        notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(10, 6))
 
-        tab_general = tk.Frame(notebook, bg="#18181b", padx=16, pady=10)
-        tab_vocab = tk.Frame(notebook, bg="#18181b", padx=16, pady=10)
+        tab_general = tk.Frame(notebook, bg="#18181b", padx=16, pady=12)
+        tab_vocab = tk.Frame(notebook, bg="#18181b", padx=16, pady=12)
 
         notebook.add(tab_general, text="⚙️ General y Modelos")
         notebook.add(tab_vocab, text="📖 Vocabulario Personalizado")
 
         self._build_general_tab(tab_general)
         self._build_vocab_tab(tab_vocab)
-
-        # Bottom action buttons bar
-        btn_bar = tk.Frame(self.window, bg="#27272a", height=50)
-        btn_bar.pack(fill=tk.X, side=tk.BOTTOM)
-
-        btn_open_json = tk.Button(
-            btn_bar,
-            text="📄 Editar config.json",
-            font=("Segoe UI", 9),
-            bg="#3f3f46",
-            fg="#FBFBFD",
-            activebackground="#52525b",
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            padx=10,
-            pady=4,
-            command=self._on_open_json,
-        )
-        btn_open_json.pack(side=tk.LEFT, padx=16, pady=10)
-
-        btn_cancel = tk.Button(
-            btn_bar,
-            text="Minimizar a la Bandeja (Esc)",
-            font=("Segoe UI", 9),
-            bg="#3f3f46",
-            fg="#FBFBFD",
-            activebackground="#52525b",
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            padx=12,
-            pady=4,
-            command=self._on_cancel,
-        )
-        btn_cancel.pack(side=tk.RIGHT, padx=(6, 16), pady=10)
-
-        btn_save = tk.Button(
-            btn_bar,
-            text="💾 Guardar y Aplicar",
-            font=("Segoe UI", 9, "bold"),
-            bg="#3284C6",
-            fg="#FFFFFF",
-            activebackground="#2669a0",
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            padx=14,
-            pady=4,
-            command=self._on_save,
-        )
-        btn_save.pack(side=tk.RIGHT, padx=6, pady=10)
 
     def _build_general_tab(self, parent: tk.Frame) -> None:
         """Build general settings tab content."""
@@ -303,7 +328,7 @@ class SettingsModal:
 
         # Engine selector row
         engine_row = tk.Frame(parent, bg="#18181b")
-        engine_row.pack(fill=tk.X, pady=2)
+        engine_row.pack(fill=tk.X, pady=3)
         tk.Label(
             engine_row,
             text="Motor de Audio:",
@@ -325,7 +350,7 @@ class SettingsModal:
 
         # Language selector row
         lang_row = tk.Frame(parent, bg="#18181b")
-        lang_row.pack(fill=tk.X, pady=2)
+        lang_row.pack(fill=tk.X, pady=3)
         tk.Label(
             lang_row,
             text="Idioma STT:",
@@ -354,7 +379,7 @@ class SettingsModal:
 
         # 1-Click direct browser helper
         groq_link_row = tk.Frame(parent, bg="#18181b")
-        groq_link_row.pack(fill=tk.X, pady=(0, 3))
+        groq_link_row.pack(fill=tk.X, pady=(2, 4))
         tk.Label(groq_link_row, text="", bg="#18181b", width=20).pack(side=tk.LEFT)
         btn_get_key = tk.Button(
             groq_link_row,
@@ -380,7 +405,7 @@ class SettingsModal:
             parent,
             label="Modelo LLM Groq:",
             var=self.var_llm_model,
-            help_text="llama-3.1-8b-instant",
+            help_text="qwen/qwen3.8-27b (Recomendado) o groq/compound-mini",
         )
 
         # --- Section 3: Comportamiento ---
@@ -532,7 +557,7 @@ class SettingsModal:
     def _create_section_label(self, parent: tk.Frame, title: str) -> None:
         """Create a section header with accent line."""
         sec_frame = tk.Frame(parent, bg="#18181b")
-        sec_frame.pack(fill=tk.X, pady=(10, 3))
+        sec_frame.pack(fill=tk.X, pady=(14, 5))
 
         tk.Label(
             sec_frame,
@@ -550,7 +575,7 @@ class SettingsModal:
     ) -> None:
         """Create a label + entry row with rendered inline help text."""
         row = tk.Frame(parent, bg="#18181b")
-        row.pack(fill=tk.X, pady=2)
+        row.pack(fill=tk.X, pady=3)
 
         tk.Label(
             row,
@@ -588,14 +613,14 @@ class SettingsModal:
                 bg="#18181b",
                 anchor="w",
             )
-            help_lbl.pack(fill=tk.X, pady=(1, 0))
+            help_lbl.pack(fill=tk.X, pady=(2, 0))
 
     def _create_masked_entry_row(
         self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
     ) -> None:
         """Create a masked entry row with asterisks, eye toggle button and help text."""
         row = tk.Frame(parent, bg="#18181b")
-        row.pack(fill=tk.X, pady=2)
+        row.pack(fill=tk.X, pady=3)
 
         tk.Label(
             row,

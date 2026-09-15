@@ -145,7 +145,7 @@ def check_vad_model() -> tuple[bool, str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="VoiceFlow-Win Hardware & Environment Diagnostics")
+    parser = argparse.ArgumentParser(description="MorocoVoice Hardware & Environment Diagnostics")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
     args = parser.parse_args()
 

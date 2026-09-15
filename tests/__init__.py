@@ -1,1 +1,1 @@
-"""VoiceFlow-Win Test Suite."""
+"""MorocoVoice Test Suite."""

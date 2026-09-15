@@ -1,4 +1,4 @@
-"""Procedural in-memory WAV sound synthesis and playback for VoiceFlow-Win.
+"""Procedural in-memory WAV sound synthesis and playback for MorocoVoice.
 
 Generates blip/pop auditory cues entirely in memory without relying on disk I/O,
 and plays them asynchronously using winsound to prevent UI or audio capture blocking.

@@ -1,2 +1,2 @@
-"""VoiceFlow-Win Platform Integration (Win32, Sounds, Hotkeys, Injector)."""
-__version__ = "0.1.0"
+"""MorocoVoice Platform Integration (Win32, Sounds, Hotkeys, Injector)."""
+__version__ = "1.0.4"

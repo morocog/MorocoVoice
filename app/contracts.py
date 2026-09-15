@@ -1,4 +1,4 @@
-"""Immutable interfaces, contracts, dataclasses, enums and custom exceptions for VoiceFlow-Win."""
+"""Immutable interfaces, contracts, dataclasses, enums and custom exceptions for MorocoVoice."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 
 
 class AppState(StrEnum):
-    """Operational states of the VoiceFlow-Win runtime."""
+    """Operational states of the MorocoVoice runtime."""
     IDLE = "IDLE"
     RECORDING = "RECORDING"
     PROCESSING = "PROCESSING"
@@ -85,7 +85,7 @@ class AppConfig:
     engine: AudioEngineType = AudioEngineType.CLOUD
     groq_api_key: str = ""
     groq_stt_model: str = "whisper-large-v3"
-    groq_llm_model: str = "llama-3.1-8b-instant"
+    groq_llm_model: str = "qwen/qwen3.8-27b"
     local_whisper_model: str = "base"
     local_compute_type: str = "int8"
     ollama_url: str = "http://localhost:11434"
@@ -104,29 +104,29 @@ class MorocoVoiceException(Exception):
     """Base exception for all MorocoVoice errors."""
 
 
-# Backward compatibility alias
-VoiceFlowException = MorocoVoiceException
-
-
-class AudioCaptureError(VoiceFlowException):
+class AudioCaptureError(MorocoVoiceException):
     """Raised when WASAPI audio stream fails or device is inaccessible."""
 
 
-class InferenceError(VoiceFlowException):
+class InferenceError(MorocoVoiceException):
     """Raised when STT or LLM inference fails."""
 
 
-class InjectionError(VoiceFlowException):
+class InjectionError(MorocoVoiceException):
     """Raised when Win32 SendInput or clipboard injection fails."""
 
 
-class UIPIElevationError(VoiceFlowException):
-    """Raised when target window is elevated as Admin and VoiceFlow cannot inject."""
+class UIPIElevationError(MorocoVoiceException):
+    """Raised when target window is elevated as Admin and MorocoVoice cannot inject."""
 
 
-class HardwareCompatibilityError(VoiceFlowException):
+class HardwareCompatibilityError(MorocoVoiceException):
     """Raised when required hardware features are missing."""
 
 
-class VADError(VoiceFlowException):
+class VADError(MorocoVoiceException):
     """Raised when VAD fails to initialize or process audio."""
+
+
+# Backward compatibility alias
+VoiceFlowException = MorocoVoiceException

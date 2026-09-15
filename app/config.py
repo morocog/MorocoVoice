@@ -1,4 +1,4 @@
-"""Configuration loader and validator for VoiceFlow-Win.
+"""Configuration loader and validator for MorocoVoice.
 
 Loads JSON configuration and environment variables into an immutable AppConfig.
 Tolerates unknown configuration keys by emitting a warning to maintain forward compatibility.

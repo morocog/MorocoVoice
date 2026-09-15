@@ -1,4 +1,4 @@
-"""Main runtime orchestrator for VoiceFlow-Win.
+"""Main runtime orchestrator for MorocoVoice.
 
 Initializes Per-Monitor DPI Awareness v2 before importing Tkinter,
 enforces single-instance Win32 Mutex, orchestrates staggered warm-up,
@@ -113,20 +113,25 @@ class MorocoVoiceApplication:
             shutdown=new_config.hotkey_shutdown,
             diagnostics=new_config.hotkey_diagnostics,
         )
+        # Cleanly release previous engine resources before instantiating new manager
+        old_engine = self.engine_mgr
         self.engine_mgr = EngineManager(new_config)
+        del old_engine
         self.rewriter = SemanticRewriter(new_config)
         self.tray.update_status(new_config.engine, self.vad.get_mode(), new_config.hotkey_dictation)
         logger.info("Configuration hot-reloaded successfully in live runtime.")
 
     def enforce_single_instance(self) -> bool:
         """Enforce single instance execution via Win32 Named Mutex."""
-        # # VERIFY: CreateMutexW to prevent duplicate overlapping instances
+        # VERIFY: CreateMutexW to prevent duplicate overlapping instances
         handle = ctypes.windll.kernel32.CreateMutexW(None, True, MUTEX_NAME)
+        if not handle:
+            logger.error("Failed to create Win32 named mutex (handle is NULL).")
+            return False
         last_err = ctypes.windll.kernel32.GetLastError()
         if last_err == ERROR_ALREADY_EXISTS:
             logger.warning("Another instance of MorocoVoice is already running. Exiting.")
-            if handle:
-                ctypes.windll.kernel32.CloseHandle(handle)
+            ctypes.windll.kernel32.CloseHandle(handle)
             return False
         self._mutex_handle = handle
         return True
@@ -159,8 +164,7 @@ class MorocoVoiceApplication:
             # Stop recording and process
             play_sound_pop()
             audio_buffer = self.recorder.stop()
-            if self.vad and not self.recorder.has_detected_speech():
-                logger.info("VAD detected zero speech during recording. Suppressing transcription.")
+            if len(audio_buffer) == 0:
                 self.root.after(0, self.hud.hide)
                 return
 
@@ -188,8 +192,7 @@ class MorocoVoiceApplication:
         logger.info("Auto-cutoff reached (max duration limit). Stopping recording.")
         play_sound_pop()
         audio_buffer = self.recorder.stop()
-        if self.vad and not self.recorder.has_detected_speech():
-            logger.info("No speech detected at max duration. Suppressing transcription.")
+        if len(audio_buffer) == 0:
             self.root.after(0, self.hud.hide)
             return
 
@@ -201,8 +204,7 @@ class MorocoVoiceApplication:
         logger.info("VAD silence cutoff reached. Auto-stopping recording.")
         play_sound_pop()
         audio_buffer = self.recorder.stop()
-        if self.vad and not self.recorder.has_detected_speech():
-            logger.info("No speech detected on silence cutoff. Suppressing transcription.")
+        if len(audio_buffer) == 0:
             self.root.after(0, self.hud.hide)
             return
 

@@ -15,11 +15,9 @@ Thumbs.db
 Desktop.ini
 *.lnk
 
-# VoiceFlow / MorocoVoice Runtime & Models
+# MorocoVoice Runtime & Models
 app/audio/models/*.onnx
 app/audio/models/*.tmp
-voiceflow.log
-voiceflow.log.*
 morocovoice.log
 morocovoice.log.*
 .env

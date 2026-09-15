@@ -65,7 +65,7 @@ def is_process_elevated(pid: int) -> bool:
 
 
 def is_current_process_elevated() -> bool:
-    """Check if VoiceFlow-Win itself is running with Administrator elevation."""
+    """Check if MorocoVoice itself is running with Administrator elevation."""
     return is_process_elevated(os.getpid())
 
 
