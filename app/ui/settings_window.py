@@ -299,6 +299,8 @@ class SettingsModal:
 
         self.var_dictation = tk.StringVar(value=self.current_config.hotkey_dictation)
         self.var_rewrite = tk.StringVar(value=self.current_config.hotkey_rewrite)
+        self.var_settings = tk.StringVar(value=self.current_config.hotkey_settings or "ctrl+alt+s")
+        self.var_diagnostics = tk.StringVar(value=self.current_config.hotkey_diagnostics)
 
         self._create_entry_row(
             parent,
@@ -311,6 +313,18 @@ class SettingsModal:
             label="Reescritura Contextual:",
             var=self.var_rewrite,
             help_text="Atajo para pulir selección activa (default: ctrl+shift+space)",
+        )
+        self._create_entry_row(
+            parent,
+            label="Abrir Configuración:",
+            var=self.var_settings,
+            help_text="Vía de teclado a esta ventana si el icono falla (default: ctrl+alt+s)",
+        )
+        self._create_entry_row(
+            parent,
+            label="Diagnóstico (Logs):",
+            var=self.var_diagnostics,
+            help_text="Abre morocovoice.log en Notepad (default: ctrl+shift+d)",
         )
 
         # --- Section 2: Motor y Modelos ---
@@ -712,6 +726,8 @@ class SettingsModal:
         try:
             dictation_val = self.var_dictation.get().strip()
             rewrite_val = self.var_rewrite.get().strip()
+            settings_val = self.var_settings.get().strip()
+            diagnostics_val = self.var_diagnostics.get().strip()
             engine_str = self.var_engine.get().strip().upper()
             stt_lang = self.var_stt_language.get().strip() or "es"
             stt_model = self.var_stt_model.get().strip()
@@ -721,6 +737,17 @@ class SettingsModal:
 
             if not dictation_val:
                 messagebox.showerror("Error de validación", "El atajo de dictado no puede estar vacío.", parent=self.window)
+                return
+
+            if not settings_val:
+                messagebox.showerror(
+                    "Error de validación",
+                    "El atajo para abrir Configuración no puede estar vacío.\n\n"
+                    "Es la única vía de teclado a esta ventana cuando el icono de la "
+                    "bandeja del sistema no está disponible (por ejemplo, si Windows "
+                    "rechaza el icono o lo esconde en el cajón de desbordamiento).",
+                    parent=self.window,
+                )
                 return
 
             engine_type = AudioEngineType.CLOUD if engine_str == "CLOUD" else AudioEngineType.LOCAL
@@ -790,6 +817,8 @@ class SettingsModal:
             cfg_dict.update({
                 "hotkey_dictation": dictation_val,
                 "hotkey_rewrite": rewrite_val,
+                "hotkey_settings": settings_val,
+                "hotkey_diagnostics": diagnostics_val,
                 "engine": engine_type.value,
                 "stt_language": stt_lang,
                 "groq_stt_model": stt_model,
@@ -797,8 +826,9 @@ class SettingsModal:
                 "max_recording_seconds": max_sec,
                 "clipboard_restore_delay_ms": delay_ms,
             })
-            cfg_dict.pop("hotkey_shutdown", None)
-            cfg_dict.pop("hotkey_diagnostics", None)
+            # NOTE: hotkey_shutdown and hotkey_diagnostics used to be *deleted* here,
+            # which silently disabled them on every save. They are now written back
+            # (and exposed in the UI) instead of being dropped.
 
             # Save to config.json atomically
             with open(self.config_path, "w", encoding="utf-8") as f:
@@ -824,6 +854,7 @@ class SettingsModal:
                 "MorocoVoice - Configuración Actualizada",
                 f"Cambios guardados con éxito.\n\n"
                 f"• Atajo de dictado: {dictation_val}\n"
+                f"• Abrir Configuración: {settings_val}\n"
                 f"• Motor activo: {engine_type.value}\n"
                 f"• Idioma STT: {stt_lang}\n"
                 f"• Vocabulario activo: {len(terms)} términos\n"

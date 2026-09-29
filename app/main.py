@@ -14,6 +14,7 @@ import threading
 import time
 import tkinter as tk
 from ctypes import wintypes
+from pathlib import Path
 
 # CRITICAL DPI AWARENESS: Must execute before any Tkinter / UI imports
 try:
@@ -33,6 +34,7 @@ from app.llm.context import (
 )
 from app.llm.rewriter import SemanticRewriter
 from app.logging_setup import open_log_in_notepad, setup_logging
+from app.platform.environment import describe_restriction, get_security_context
 from app.platform.hotkey import HotkeyListener
 from app.platform.injector import emergency_restore, inject_text
 from app.platform.sounds import play_sound_blip, play_sound_pop
@@ -86,16 +88,19 @@ class MorocoVoiceApplication:
             engine_type=config.engine,
             vad_mode=self.vad.get_mode(),
             hotkey_dictation=config.hotkey_dictation,
+            hotkey_settings=config.hotkey_settings,
         )
         self.hotkeys = HotkeyListener(
             hotkey_dictation=config.hotkey_dictation,
             hotkey_rewrite=config.hotkey_rewrite,
             hotkey_shutdown=config.hotkey_shutdown,
             hotkey_diagnostics=config.hotkey_diagnostics,
+            hotkey_settings=config.hotkey_settings,
             on_dictate_toggle=self.toggle_dictation,
             on_rewrite_trigger=self.trigger_rewrite,
             on_shutdown_trigger=self.shutdown_ordered,
             on_diagnostics_trigger=self.trigger_diagnostics,
+            on_settings_trigger=self.open_settings,
         )
 
     def open_settings(self) -> None:
@@ -112,6 +117,7 @@ class MorocoVoiceApplication:
             rewrite=new_config.hotkey_rewrite,
             shutdown=new_config.hotkey_shutdown,
             diagnostics=new_config.hotkey_diagnostics,
+            settings=new_config.hotkey_settings,
         )
         # Cleanly release previous engine resources before instantiating new manager
         old_engine = self.engine_mgr
@@ -140,6 +146,10 @@ class MorocoVoiceApplication:
         """Perform staggered warm-up and start listener threads."""
         logger.info("Starting MorocoVoice runtime...")
 
+        # Environment gate: detect a restricted security context BEFORE the tray and
+        # the hotkey hook fail silently for reasons nothing else can explain.
+        self._check_security_context()
+
         # Level 1 Warm-up (blocking 2-5s if local)
         self.engine_mgr.warm_up()
 
@@ -154,6 +164,36 @@ class MorocoVoiceApplication:
         # Visual confirmation HUD banner on startup
         self.hud.show(f"MorocoVoice Activo ({self.config.hotkey_dictation})", state=AppState.INJECTING)
         self.root.after(2500, self.hud.hide)
+
+    def _check_security_context(self) -> None:
+        """Warn loudly when Windows will deny the tray icon and/or the input hook.
+
+        A Low-integrity process (or an AppContainer) cannot publish a tray icon
+        or observe global keystrokes, yet it starts normally, paints its HUD and
+        reports healthy threads - so the app looks fine while being completely
+        unusable. Inspecting the token turns that invisible failure into a
+        message the user can act on, instead of a silent, baffling dead app.
+        """
+        try:
+            context = get_security_context()
+        except Exception as exc:  # pragma: no cover - must never block startup
+            logger.debug("Security context check skipped: %s", exc)
+            return
+
+        logger.info(
+            "Security context: integrity=%s (0x%04X), app_container=%s, elevated=%s",
+            context.integrity_name,
+            context.integrity_rid,
+            context.is_app_container,
+            context.is_elevated,
+        )
+        if context.supports_tray_and_hooks:
+            return
+
+        app_folder = Path(__file__).resolve().parent.parent
+        logger.error(describe_restriction(context, app_folder))
+        self.hud.show("Entorno restringido: ejecuta diagnostico.bat", state=AppState.ERROR)
+        self.root.after(9000, self.hud.hide)
 
     def toggle_dictation(self) -> None:
         """Toggle recording state on Alt+Space press."""

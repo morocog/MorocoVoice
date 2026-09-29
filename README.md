@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-v1.0.4-22c55e?style=for-the-badge)
+![Version](https://img.shields.io/badge/Version-v1.0.5-22c55e?style=for-the-badge)
 ![Windows 10/11](https://img.shields.io/badge/OS-Windows%2010%20%7C%2011%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)
 ![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)
 ![Zero PyTorch](https://img.shields.io/badge/Architecture-Zero%20PyTorch%20(%3C450MB)-10b981?style=for-the-badge)
@@ -78,8 +78,12 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 | :--- | :--- | :--- |
 | **`Win + Space`** | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
+| **`Ctrl + Alt + S`** | **Abrir Configuración** | Vía de teclado a la ventana de configuración. Existe porque el icono de la bandeja puede no estar disponible (Windows 11 esconde los iconos nuevos en el cajón `^`, y un entorno restringido puede rechazarlos). Nunca te deja sin acceso. |
+| **`Ctrl + Shift + D`** | **Diagnóstico (Logs)** | Abre `morocovoice.log` en el Bloc de notas para inspeccionar qué está pasando. |
 
-> 💡 *Para abrir Configuración, ver los registros de depuración o cerrar la aplicación de forma limpia, simplemente haz clic derecho en el icono de MorocoVoice en la bandeja del sistema (junto al reloj de Windows).*
+> 💡 *El icono de la bandeja del sistema (junto al reloj) ofrece el menú completo: Configuración, Abrir Logs y Salir. Si no lo ves, búscalo en el cajón de desbordamiento `^` y arrástralo hacia fuera — o usa `Ctrl + Alt + S`.*
+>
+> ⚠️ **`Win + Space` es también el atajo nativo de Windows para cambiar de idioma de teclado.** MorocoVoice lo escucha sin suprimirlo, así que en equipos con más de un idioma instalado conviene cambiar el atajo de dictado por otro libre (por ejemplo `Ctrl + Alt + Space`) desde la ventana de Configuración.
 
 ---
 
@@ -89,7 +93,7 @@ MorocoVoice ofrece arquitectura dual según tus necesidades de conectividad o pr
 
 1. **Modo Cloud (Recomendado - Paridad Wispr Flow):**
    - Transcripción con `whisper-large-v3-turbo` en Groq Cloud (~400 ms de latencia API).
-   - Reescritura semántica contextual ultrarrápida con `llama-3.1-8b-instant`.
+   - Reescritura semántica contextual ultrarrápida con `qwen/qwen3.8-27b`.
 2. **Modo Local Offline (Privacidad Absoluta):**
    - Inferencia de voz local en CPU utilizando `faster-whisper` (cuantización `int8`, motor CTranslate2 optimizado con AVX2/AVX512).
    - Fallback semántico local compatible con **Ollama** (`http://localhost:11434`).
@@ -113,14 +117,19 @@ MorocoVoice/
 │   ├── audio/              # Captura de micrófono y VAD Silero ONNX
 │   ├── engine/             # Motores STT (Groq Cloud Turbo & Local int8)
 │   ├── llm/                # Reescritura semántica contextual y prompts
-│   ├── platform/           # Hooks Win32, SendInput y atajos globales
+│   ├── platform/           # Hooks Win32, SendInput, atajos globales y
+│   │                       #   environment.py (sonda de seguridad de Windows)
 │   ├── ui/                 # HUD flotante, Bandeja de sistema y Configuración
 │   ├── contracts.py        # Esquemas de configuración inmutables
+│   ├── logging_setup.py    # Logging sin PII + captura de errores de hilos
 │   └── main.py             # Orquestador principal y mutex de instancia única
-├── tests/                  # Suite de pruebas unitarias (26 tests)
+├── docs/                   # Auditorías, notas de versión y TROUBLESHOOTING.md
+├── tests/                  # Suite de pruebas unitarias (43 tests)
 ├── .env.example            # Plantilla de variables de entorno
-├── config.json             # Ajustes de usuario sincronizados
+├── config.example.json     # Plantilla de configuración de usuario
 ├── custom_vocabulary.json  # Vocabulario especializado (jerga técnica, nombres)
+├── diagnostico.bat         # Diagnóstico del sistema en un clic
+├── verify_install.py       # Preflight: audio, hardware y entorno de seguridad
 ├── LICENSE                 # Licencia MIT
 ├── requirements.txt        # Dependencias industriales (Zero PyTorch)
 └── run.bat                 # Lanzador e instalador automatizado
@@ -135,6 +144,45 @@ MorocoVoice incluye una suite de pruebas automatizadas que validan inyección, d
 ```powershell
 .\.venv\Scripts\pytest -v
 ```
+
+---
+
+## 🩺 Solución de Problemas
+
+Si el icono no aparece junto al reloj, o `Win + Space` no hace nada, **no asumas que la
+aplicación está rota**. La causa más habitual es el **entorno de seguridad de Windows**,
+no el código.
+
+**Ejecuta primero:**
+
+```cmd
+diagnostico.bat
+```
+
+Analiza audio, hardware y —lo más importante— el **entorno de seguridad**, con veredicto
+claro y el comando exacto para arreglarlo.
+
+| Síntoma | Causa más probable |
+| :--- | :--- |
+| La app arranca, pero **ni icono ni atajos** | El proceso corre en integridad **Low** (carpeta etiquetada por un sandbox de agente de IA). Windows deniega la bandeja y el hook de teclado queda ciego |
+| El icono está pero escondido en el cajón `^` | Windows 11 no coloca los iconos nuevos junto al reloj: arrástralo fuera |
+| `Win + Space` **cambia el idioma** del teclado | Colisión con el atajo nativo de Windows: cambia el atajo de dictado |
+| Sale el HUD pero no escribe | La ventana destino corre como Administrador (UIPI) |
+
+👉 **Guía completa y detallada: [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)**
+
+### Por qué existe esta sección
+
+Un usuario reportó que la aplicación «se apagaba» y «ya no dejaba las opciones junto al
+reloj». La investigación demostró que el código era correcto: la carpeta del proyecto
+tenía una **etiqueta de integridad `Low` heredable** (puesta por el sandbox de un agente
+de IA), y por eso Windows lanzaba el proceso en Low, donde **deniega el icono de bandeja
+y descarta todas las pulsaciones** del hook de teclado. Como la app corre con `pythonw`,
+las excepciones se descartaban sin dejar rastro: parecía viva y no funcionaba.
+
+Desde la **v1.0.5** MorocoVoice detecta ese contexto al arrancar, lo explica en el log con
+el comando de solución, verifica de verdad que el teclado se captura, y garantiza el
+atajo `Ctrl + Alt + S` para que **nunca** te quedes sin acceso a Configuración.
 
 ---
 

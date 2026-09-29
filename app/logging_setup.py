@@ -11,6 +11,8 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+import threading
+import traceback
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -91,20 +93,62 @@ def setup_logging(log_dir: str | Path | None = None) -> logging.Logger:
     file_handler.addFilter(PIISafeFilter())
     logger.addHandler(file_handler)
 
-    # Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(logging.INFO)
-    console_formatter = logging.Formatter(
-        fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    console_handler.setFormatter(console_formatter)
-    console_handler.addFilter(PIISafeFilter())
-    logger.addHandler(console_handler)
+    # Console handler.
+    # CRITICAL: under pythonw.exe sys.stdout is None, and logging.StreamHandler(None)
+    # raises AttributeError on every emit. Only attach it when a real stream exists.
+    if sys.stdout is not None:
+        console_handler = logging.StreamHandler(sys.stdout)
+        console_handler.setLevel(logging.INFO)
+        console_formatter = logging.Formatter(
+            fmt="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        console_handler.setFormatter(console_formatter)
+        console_handler.addFilter(PIISafeFilter())
+        logger.addHandler(console_handler)
+
+    _install_exception_hooks()
 
     _root_logger_initialized = True
     logger.info("MorocoVoice logging subsystem initialized (PII-Safe RotatingFileHandler).")
     return logger
+
+
+def _install_exception_hooks() -> None:
+    """Route unhandled exceptions from any thread into the log file.
+
+    CRITICAL: MorocoVoice runs under pythonw.exe, where sys.stderr is None.
+    Python's default excepthooks therefore discard every traceback, so a dead
+    tray/hotkey worker thread looks exactly like a healthy one. These hooks make
+    such failures visible in morocovoice.log instead of vanishing.
+    """
+    log = logging.getLogger("morocovoice")
+
+    def _report(kind: str, exc_type, exc_value, exc_tb) -> None:
+        try:
+            detail = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            log.error("Unhandled %s exception ->\n%s", kind, detail)
+        except Exception:
+            # Never let the reporter itself take down the process.
+            pass
+
+    def _sys_hook(exc_type, exc_value, exc_tb) -> None:
+        _report("main-thread", exc_type, exc_value, exc_tb)
+
+    def _thread_hook(args) -> None:
+        if args.exc_type is SystemExit:
+            return
+        name = getattr(args.thread, "name", "desconocido") if args.thread else "desconocido"
+        _report(f"thread '{name}'", args.exc_type, args.exc_value, args.exc_traceback)
+
+    try:
+        sys.excepthook = _sys_hook
+    except Exception:
+        pass
+    try:
+        threading.excepthook = _thread_hook
+    except Exception:
+        pass
 
 
 def get_logger(name: str) -> logging.Logger:

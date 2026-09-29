@@ -186,6 +186,32 @@ def release_modifiers() -> None:
     time.sleep(0.02)
 
 
+def send_vk_tap(vk: int) -> bool:
+    """Synthesize one clean key-down/key-up pair for a virtual key.
+
+    Used by the hotkey subsystem to *prove* the low-level keyboard hook is
+    actually receiving input. A lone modifier (VK_SHIFT) is the safest probe:
+    pressed and released on its own it produces no character, triggers no
+    shortcut and changes no state, yet it still travels the full input path.
+
+    Returns True when SendInput accepted both halves of the tap.
+    """
+    cb_size = ctypes.sizeof(INPUT)
+
+    down = (INPUT * 1)()
+    down[0].type = INPUT_KEYBOARD
+    down[0].union.ki = KEYBDINPUT(vk, 0, 0, 0, 0)
+
+    up = (INPUT * 1)()
+    up[0].type = INPUT_KEYBOARD
+    up[0].union.ki = KEYBDINPUT(vk, 0, KEYEVENTF_KEYUP, 0, 0)
+
+    sent_down = ctypes.windll.user32.SendInput(1, ctypes.byref(down), cb_size)
+    time.sleep(0.03)
+    sent_up = ctypes.windll.user32.SendInput(1, ctypes.byref(up), cb_size)
+    return bool(sent_down and sent_up)
+
+
 def send_ctrl_v() -> None:
     """Synthesize Ctrl+V keydown/keyup events using staged Win32 SendInput."""
     # Ensure no lingering modifiers (Alt/Win/Shift) warp Ctrl+V into Win+Ctrl+V or Alt+Ctrl+V

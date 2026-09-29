@@ -16,6 +16,7 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 import winreg
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,14 @@ from typing import Any
 if sys.platform != "win32":
     print("CRITICAL ERROR: MorocoVoice requires Windows 10/11 x64. Aborting.")
     sys.exit(1)
+
+try:
+    from app import __version__ as APP_VERSION
+except Exception:  # pragma: no cover - allows running the file from anywhere
+    APP_VERSION = "desconocida"
+
+#: Virtual-key code for SHIFT: pressed alone it is a harmless way to test capture.
+VK_SHIFT = 0x10
 
 
 def check_python_version() -> tuple[bool, str]:
@@ -144,6 +153,154 @@ def check_vad_model() -> tuple[bool, str]:
     return False, "silero_vad.onnx not yet cached locally (will auto-download on first run)"
 
 
+def check_security_context() -> tuple[bool, str, str]:
+    """Verify Windows grants this process what the tray icon and hotkeys need.
+
+    MorocoVoice needs Medium integrity or better to publish a notification-area
+    icon (``Shell_NotifyIcon``) and to receive global keystrokes
+    (``SetWindowsHookEx``). At Low integrity both are silently denied: the app
+    starts, paints its HUD, reports healthy threads, and simply never responds.
+    """
+    try:
+        from app.platform.environment import get_security_context, remediation_command
+    except Exception as e:
+        return False, f"No pude cargar la sonda de entorno: {e}", ""
+
+    ctx = get_security_context()
+    detail = (
+        f"Integridad del proceso: {ctx.integrity_name} (0x{ctx.integrity_rid:04X}) | "
+        f"AppContainer: {'SI' if ctx.is_app_container else 'no'} | "
+        f"Elevado: {'SI' if ctx.is_elevated else 'no'}"
+    )
+    if ctx.supports_tray_and_hooks:
+        return True, detail, ""
+
+    folder = Path(__file__).resolve().parent
+    hint = (
+        "Windows denegara el icono de bandeja y el hook de teclado no recibira ninguna\n"
+        "     pulsacion, asi que NINGUN atajo global funcionara aunque la app parezca sana.\n"
+        "     Causa habitual: esta carpeta (o una carpeta padre) tiene etiqueta de integridad\n"
+        "     Low, y los ejecutables dentro se lanzan ELLOS MISMOS en Low aunque los abras\n"
+        "     desde el Explorador. La suele poner el sandbox de un agente de IA.\n"
+        f"     Solucion (CMD o PowerShell normal, y luego reiniciar MorocoVoice):\n"
+        f"       {remediation_command(folder)}\n"
+        "     Ver docs/TROUBLESHOOTING.md"
+    )
+    return False, detail, hint
+
+
+def check_keyboard_capture() -> tuple[bool, str]:
+    """Prove the global keyboard hook actually receives keystrokes.
+
+    Liveness is not evidence: at Low integrity ``SetWindowsHookEx`` succeeds and
+    the listener thread stays healthy while UIPI drops every event. So we tap a
+    lone SHIFT with SendInput (no character, no shortcut, no state change) and
+    require the hook to observe it.
+    """
+    try:
+        from pynput import keyboard
+    except Exception as e:
+        return False, f"pynput no disponible: {e}"
+
+    seen = {"count": 0}
+
+    def _on_press(_key: Any) -> None:
+        seen["count"] += 1
+
+    listener = keyboard.Listener(on_press=_on_press)
+    listener.daemon = True
+    listener.start()
+    time.sleep(0.8)
+
+    if not listener.is_alive():
+        return False, "El hilo del hook murio al instalarse (SetWindowsHookEx rechazado)"
+
+    try:
+        from app.platform.injector import send_vk_tap
+
+        send_vk_tap(VK_SHIFT)
+    except Exception as e:
+        return False, f"No pude enviar la pulsacion de prueba: {e}"
+
+    deadline = time.time() + 1.0
+    try:
+        while time.time() < deadline:
+            if seen["count"] > 0:
+                return True, "El hook de teclado RECIBE eventos (pulsacion de prueba observada)"
+            time.sleep(0.05)
+    finally:
+        try:
+            listener.stop()
+        except Exception:
+            pass
+
+    return False, (
+        "El hook de teclado NO recibe eventos: Windows entrega el teclado a un contexto "
+        "que este proceso no puede ver. Sintoma tipico de proceso en integridad Low"
+    )
+
+
+def check_tray_policy() -> tuple[bool, str]:
+    """Report the Windows 11 notification-area policy for this executable.
+
+    Even on a healthy system, Windows 11 hides new tray icons inside the overflow
+    flyout (the ``^`` chevron) instead of the taskbar corner, which users often
+    read as "the icon never appeared". Reading ``NotifyIconSettings`` lets us tell
+    the difference between "rejected" and "merely hidden".
+    """
+    try:
+        exe = Path(sys.executable)
+        # The tray entry belongs to pythonw.exe while this script usually runs
+        # under python.exe, so an exact match is preferred and a stem match is
+        # only a fallback. The matched path is reported so the answer is honest
+        # about which executable it refers to.
+        wanted_name = exe.name.lower()
+        wanted_stem = exe.stem.lower()
+        key_path = r"Control Panel\NotifyIconSettings"
+        exact: tuple[str, int] | None = None
+        by_stem: tuple[str, int] | None = None
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_READ) as root:
+            index = 0
+            while True:
+                try:
+                    sub = winreg.EnumKey(root, index)
+                except OSError:
+                    break
+                index += 1
+                with winreg.OpenKey(root, sub, 0, winreg.KEY_READ) as entry:
+                    try:
+                        path, _ = winreg.QueryValueEx(entry, "ExecutablePath")
+                    except OSError:
+                        continue
+                    candidate = Path(path)
+                    try:
+                        promoted, _ = winreg.QueryValueEx(entry, "IsPromoted")
+                    except OSError:
+                        promoted = 0
+                    if candidate.name.lower() == wanted_name:
+                        exact = (str(candidate), promoted)
+                        break
+                    if by_stem is None and candidate.stem.lower() == wanted_stem:
+                        by_stem = (str(candidate), promoted)
+    except FileNotFoundError:
+        return True, "Sin politica de bandeja registrada todavia (se creara en el primer arranque)"
+    except Exception as e:
+        return True, f"No pude leer la politica de bandeja: {e}"
+
+    match = exact or by_stem
+    if match is None:
+        return True, "Sin entrada de bandeja para este ejecutable todavia"
+
+    matched_path, promoted = match
+    if promoted:
+        return True, f"Fijado junto al reloj (IsPromoted=1) para {Path(matched_path).name}"
+    return False, (
+        f"Registrado pero OCULTO en el cajon '^' ({Path(matched_path).name}). Arrastralo "
+        "fuera, o activalo en Configuracion > Personalizacion > Barra de tareas > "
+        "Otros iconos de la bandeja del sistema"
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="MorocoVoice Hardware & Environment Diagnostics")
     parser.add_argument("--json", action="store_true", help="Output results in JSON format")
@@ -183,9 +340,29 @@ def main() -> None:
     # 5. VAD check
     vad_ok, vad_msg = check_vad_model()
 
+    # 6. Security context: can this process own a tray icon and see the keyboard?
+    sec_ok, sec_msg, sec_hint = check_security_context()
+    if not sec_ok:
+        criticals.append(f"{sec_msg}\n     {sec_hint}")
+        exit_code = 1
+
+    # 7. Keyboard capture round-trip. Only escalate on its own when the security
+    #    context is healthy; otherwise it is the same root cause reported twice.
+    kbd_ok, kbd_msg = check_keyboard_capture()
+    if not kbd_ok:
+        if sec_ok:
+            criticals.append(kbd_msg)
+            exit_code = 1
+        else:
+            warnings.append(kbd_msg)
+
+    # 8. Tray visibility policy (informational)
+    tray_ok, tray_msg = check_tray_policy()
+
     # Output formatting
     report: dict[str, Any] = {
         "platform": "win32",
+        "version": APP_VERSION,
         "python": py_msg,
         "audio": audio_msg,
         "long_paths": lp_msg,
@@ -193,6 +370,12 @@ def main() -> None:
         "vram_gb": vram_gb,
         "recommendation": matrix,
         "vad": vad_msg,
+        "security_context": sec_msg,
+        "security_context_ok": sec_ok,
+        "keyboard_capture": kbd_msg,
+        "keyboard_capture_ok": kbd_ok,
+        "tray_policy": tray_msg,
+        "tray_visible_in_corner": tray_ok,
         "critical_count": len(criticals),
         "warning_count": len(warnings),
         "exit_code": exit_code,
@@ -202,7 +385,7 @@ def main() -> None:
         print(json.dumps(report, indent=2, ensure_ascii=False))
     else:
         print("=" * 70)
-        print("            DIAGNÓSTICO DE SISTEMA: MOROCOVOICE v1.0.3")
+        print(f"            DIAGNÓSTICO DE SISTEMA: MOROCOVOICE v{APP_VERSION}")
         print("=" * 70)
         print("Plataforma:           Windows (win32) [OK]")
         print(f"Entorno Python:       {py_msg}")
@@ -213,6 +396,11 @@ def main() -> None:
         print(f"  - Whisper Local:    {matrix['whisper_model']}")
         print(f"  - LLM Refinamiento: {matrix['llm_model']}")
         print(f"VAD Subsystem:        {vad_msg}")
+        print("-" * 70)
+        print("ENTORNO DE SEGURIDAD (bandeja + atajos globales)")
+        print(f"  Contexto:           {sec_msg}")
+        print(f"  Captura de teclado: {kbd_msg}")
+        print(f"  Icono de bandeja:   {tray_msg}")
         print("-" * 70)
         if criticals:
             print("ERRORES CRÍTICOS:")

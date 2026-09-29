@@ -1,11 +1,12 @@
 @echo off
 setlocal
+chcp 65001 >nul
 title MorocoVoice Launcher
 
 cd /d "%~dp0"
 
 echo ======================================================
-echo             MorocoVoice v1.0.4
+echo             MorocoVoice v1.0.5
 echo   Suite de Dictado y Reescritura por Voz en Windows
 echo ======================================================
 echo.
@@ -84,14 +85,50 @@ echo [*] Entorno de MorocoVoice inicializado con exito!
 echo.
 
 :RUN_APP
-REM 2. Limpieza de Procesos Previos para Evitar Conflictos de Mutex
-echo * Verificando y cerrando instancias previas de MorocoVoice...
-powershell -NoProfile -Command "Get-Process python*, pythonw* -ErrorAction SilentlyContinue | Where-Object { $_.Path -like '*MorocoVoice*' -or $_.Path -like '*VoiceFlow-Win*' } | Stop-Process -Force -ErrorAction SilentlyContinue" >nul 2>&1
+REM 2. Guardia de integridad: si el proceso corre en Low, Windows denegara el
+REM    icono de bandeja y el hook de teclado no vera ninguna tecla, asi que la
+REM    app parecera viva pero sin funcionar. Avisamos ANTES de arrancar.
+REM    (El nombre del nivel no se traduce: "Low Mandatory Level" es igual en
+REM    cualquier idioma de Windows, por eso se busca en ingles.)
+set "MV_INTEGRITY="
+for /f "delims=" %%i in ('whoami /groups ^| findstr /i "Mandatory Level"') do set "MV_INTEGRITY=%%i"
+REM    /c: es imprescindible: findstr trata las palabras separadas por espacio como
+REM    terminos alternativos (OR), asi que "Low Mandatory" coincidiria siempre.
+echo %MV_INTEGRITY% | findstr /i /c:"Low Mandatory" >nul
+if not errorlevel 1 (
+  echo.
+  echo ************************************************************
+  echo  AVISO: ENTORNO RESTRINGIDO ^(integridad Low^)
+  echo ************************************************************
+  echo  Esta carpeta tiene etiqueta de integridad Low, asi que la
+  echo  aplicacion se lanzara en Low y Windows le denegara el icono
+  echo  de bandeja ^(no aparecera junto al reloj^) y el hook de teclado
+  echo  ^(ningun atajo funcionara^), aunque parezca arrancar bien.
+  echo.
+  echo  Solucion: cierra esta ventana y ejecuta en CMD o PowerShell:
+  echo.
+  echo    icacls "%~dp0." /setintegritylevel Medium /T /C
+  echo.
+  echo  Despues vuelve a lanzar run.bat. Detalles en docs\TROUBLESHOOTING.md
+  echo ************************************************************
+  echo.
+  pause
+)
 
-REM 3. Arranque en Pantalla y Segundo Plano
+REM 3. Limpieza de Procesos Previos para Evitar Conflictos de Mutex
+REM    IMPORTANTE: .venv\Scripts\pythonw.exe es solo un lanzador (redirector).
+REM    El interprete que realmente ejecuta la app vive en
+REM    ...\Programs\Python\Python311\pythonw.exe y NO contiene "MorocoVoice"
+REM    en su ruta, por lo que un filtro por ruta dejaba huerfanos vivos.
+REM    Se filtra por linea de comandos (app.main) para cerrar AMBOS.
+echo * Verificando y cerrando instancias previas de MorocoVoice...
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 600" >nul 2>&1
+
+REM 4. Arranque en Pantalla y Segundo Plano
 echo * Lanzando MorocoVoice...
 echo * Atajo de Dictado: Win + Space
 echo * Atajo de Reescritura: Ctrl + Shift + Space
+echo * Atajo de Configuracion: Ctrl + Alt + S  (util si el icono no aparece)
 echo.
 
 start "" ".venv\Scripts\pythonw.exe" -m app.main

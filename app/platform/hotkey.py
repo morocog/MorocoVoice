@@ -17,6 +17,10 @@ from app.logging_setup import get_logger
 
 logger = get_logger("hotkey")
 
+#: Virtual-key code for SHIFT. Tapped alone by the capture self-test: it emits no
+#: character, fires no shortcut and changes no state, yet travels the full input path.
+VK_SHIFT = 0x10
+
 
 @dataclass(frozen=True)
 class ParsedHotkey:
@@ -101,21 +105,25 @@ class HotkeyListener:
         hotkey_rewrite: str = "ctrl+shift+space",
         hotkey_shutdown: str = "ctrl+shift+q",
         hotkey_diagnostics: str = "ctrl+shift+d",
+        hotkey_settings: str = "ctrl+alt+s",
         on_dictate_toggle: Callable[[], None] | None = None,
         on_rewrite_trigger: Callable[[], None] | None = None,
         on_shutdown_trigger: Callable[[], None] | None = None,
         on_diagnostics_trigger: Callable[[], None] | None = None,
+        on_settings_trigger: Callable[[], None] | None = None,
     ) -> None:
         self.on_dictate_toggle = on_dictate_toggle
         self.on_rewrite_trigger = on_rewrite_trigger
         self.on_shutdown_trigger = on_shutdown_trigger
         self.on_diagnostics_trigger = on_diagnostics_trigger
+        self.on_settings_trigger = on_settings_trigger
 
         self.update_shortcuts(
             dictation=hotkey_dictation,
             rewrite=hotkey_rewrite,
             shutdown=hotkey_shutdown,
             diagnostics=hotkey_diagnostics,
+            settings=hotkey_settings,
         )
 
         self._current_keys: set[keyboard.Key | keyboard.KeyCode] = set()
@@ -128,22 +136,28 @@ class HotkeyListener:
         self._last_rewrite_time = 0.0
         self._debounce_interval = 0.35
 
+        # Capture watchdog: counts every key event the hook actually delivers.
+        self._event_count = 0
+
     def update_shortcuts(
         self,
         dictation: str,
         rewrite: str,
         shutdown: str,
         diagnostics: str,
+        settings: str = "",
     ) -> None:
         """Update parsed shortcut triggers dynamically without restarting the listener."""
         self._hk_dictation = parse_hotkey_string(dictation)
         self._hk_rewrite = parse_hotkey_string(rewrite)
         self._hk_shutdown = parse_hotkey_string(shutdown)
         self._hk_diagnostics = parse_hotkey_string(diagnostics)
+        self._hk_settings = parse_hotkey_string(settings)
         logger.info(
-            "Shortcuts mapped: Dictation=%s, Rewrite=%s, Shutdown=%s, Diagnostics=%s",
+            "Shortcuts mapped: Dictation=%s, Rewrite=%s, Settings=%s, Shutdown=%s, Diagnostics=%s",
             dictation,
             rewrite,
+            settings,
             shutdown,
             diagnostics,
         )
@@ -161,7 +175,59 @@ class HotkeyListener:
             )
             self._listener.daemon = True
             self._listener.start()
-            logger.info("Global hotkey listener registered and active.")
+        logger.info("Global hotkey listener registered and active.")
+        threading.Thread(target=self._verify_capture, daemon=True, name="HotkeyWatchdog").start()
+
+    def _verify_capture(self) -> None:
+        """Prove the keyboard hook really receives input, not merely that it lives.
+
+        A live listener thread is NOT evidence that keys arrive. At Low integrity
+        ``SetWindowsHookEx`` succeeds and the thread pumps messages happily while
+        UIPI silently drops every event, so the app logs "listener active" and no
+        shortcut ever fires. Liveness checks therefore cannot detect the failure
+        that matters, which is why this watchdog taps a harmless lone modifier
+        with SendInput and requires the hook to observe it.
+        """
+        time.sleep(1.2)
+        listener = self._listener
+        if listener is None:
+            return
+        if not listener.is_alive():
+            logger.error(
+                "Keyboard hook FAILED: the listener thread died during startup, so NO "
+                "global shortcut will work. Windows most likely refused SetWindowsHookEx."
+            )
+            return
+
+        baseline = self._event_count
+        tapped = False
+        try:
+            from app.platform.injector import send_vk_tap
+
+            tapped = send_vk_tap(VK_SHIFT)
+        except Exception as exc:
+            logger.warning("Could not run the keyboard capture self-test: %s", exc)
+            return
+
+        deadline = time.perf_counter() + 1.0
+        while time.perf_counter() < deadline:
+            if self._event_count > baseline:
+                logger.info(
+                    "Keyboard hook verified: it is receiving input "
+                    "(self-test keystroke observed)."
+                )
+                return
+            time.sleep(0.05)
+
+        logger.error(
+            "Keyboard hook is NOT receiving input: the self-test keystroke was sent "
+            "(SendInput accepted=%s) but the hook observed 0 events. Windows is "
+            "delivering keyboard input somewhere this process cannot see. This is the "
+            "classic signature of an environment-restricted process (Low integrity) or "
+            "an AppContainer, and NO global shortcut can work until it is fixed. "
+            "Run diagnostico.bat for a full report, and see docs/TROUBLESHOOTING.md.",
+            tapped,
+        )
 
     def stop(self) -> None:
         """Stop the background keyboard listener safely."""
@@ -192,6 +258,10 @@ class HotkeyListener:
 
     def _on_press(self, raw_key: keyboard.Key | keyboard.KeyCode) -> None:
         """Handle key down event."""
+        # Counted before any gate: the capture watchdog needs to know whether the
+        # hook delivers anything at all, regardless of what is currently mapped.
+        self._event_count += 1
+
         if not self._is_running:
             return
 
@@ -209,14 +279,22 @@ class HotkeyListener:
                 threading.Thread(target=self.on_shutdown_trigger, daemon=True).start()
             return
 
-        # 2. Diagnostics check
+        # 2. Settings check. This is the guaranteed keyboard route into
+        #    Configuracion when the tray icon is unavailable or rejected.
+        if self._hk_settings and self._hk_settings.matches(active_keys, norm_key):
+            logger.info("Settings hotkey triggered (%s).", self._hk_settings.raw_str)
+            if self.on_settings_trigger:
+                threading.Thread(target=self.on_settings_trigger, daemon=True).start()
+            return
+
+        # 3. Diagnostics check
         if self._hk_diagnostics and self._hk_diagnostics.matches(active_keys, norm_key):
             logger.info("Diagnostics hotkey triggered (%s).", self._hk_diagnostics.raw_str)
             if self.on_diagnostics_trigger:
                 threading.Thread(target=self.on_diagnostics_trigger, daemon=True).start()
             return
 
-        # 3. Contextual Rewrite check
+        # 4. Contextual Rewrite check
         if self._hk_rewrite and self._hk_rewrite.matches(active_keys, norm_key):
             if now - self._last_rewrite_time >= self._debounce_interval:
                 self._last_rewrite_time = now
@@ -225,7 +303,7 @@ class HotkeyListener:
                     threading.Thread(target=self.on_rewrite_trigger, daemon=True).start()
             return
 
-        # 4. Dictation check
+        # 5. Dictation check
         if self._hk_dictation and self._hk_dictation.matches(active_keys, norm_key):
             if now - self._last_dictate_time >= self._debounce_interval:
                 self._last_dictate_time = now

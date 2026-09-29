@@ -1,0 +1,23 @@
+# Normalización de finales de línea.
+#
+# IMPORTANTE: los archivos .bat DEBEN usar CRLF. cmd.exe puede malinterpretar
+# un lote con finales LF (sobre todo con etiquetas goto y bloques for/if), y el
+# resultado son fallos de arranque difíciles de diagnosticar. Forzarlo aquí
+# garantiza CRLF en el checkout aunque el usuario tenga core.autocrlf=false.
+* text=auto
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.py text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Modelos y binarios: nunca tocar.
+*.onnx binary
+*.png binary
+*.ico binary
+*.pdf binary
