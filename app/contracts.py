@@ -82,8 +82,8 @@ class AppConfig:
     hotkey_rewrite: str = "ctrl+shift+space"
     hotkey_shutdown: str = ""
     hotkey_diagnostics: str = ""
-    #: Guaranteed keyboard route into the Settings window.
-    hotkey_settings: str = "ctrl+alt+s"
+    #: Optional keyboard route into the Settings window (disabled by default; double-click tray icon).
+    hotkey_settings: str = ""
     engine: AudioEngineType = AudioEngineType.CLOUD
     groq_api_key: str = ""
     groq_stt_model: str = "whisper-large-v3"

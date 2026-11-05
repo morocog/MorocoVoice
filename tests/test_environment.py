@@ -102,10 +102,15 @@ def test_describe_restriction_mentions_cause_and_fix():
     assert "TROUBLESHOOTING" in message
 
 
-def test_settings_hotkey_has_a_non_empty_default():
-    """Regression: an empty Settings hotkey is exactly what locks users out.
+def test_core_hotkeys_defaults_clean():
+    """Verify that only the 2 core hotkeys (dictation and rewrite) are active by default.
 
-    The tray icon used to be the only route into the Settings window. When a
-    restricted environment rejects that icon, a keyboard route must exist.
+    Per Telat governance and user direction, no extra hotkeys (settings, diagnostics,
+    shutdown) should be registered by default, preventing shortcut pollution.
+    The system tray icon (with double-click) is the primary route into Settings.
     """
-    assert AppConfig().hotkey_settings
+    cfg = AppConfig()
+    assert cfg.hotkey_dictation == "win+space"
+    assert cfg.hotkey_rewrite == "ctrl+shift+space"
+    assert cfg.hotkey_settings == ""
+    assert cfg.hotkey_diagnostics == ""

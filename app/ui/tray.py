@@ -110,6 +110,26 @@ def _instrument_pystray() -> None:
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Could not instrument Shell_NotifyIcon: %s", exc)
 
+    try:
+        WM_LBUTTONUP = 0x0202
+        WM_LBUTTONDBLCLK = 0x0203
+
+        orig_on_notify = getattr(pystray_win32.Icon, "_on_notify", None)
+        if orig_on_notify:
+            def _patched_on_notify(self_icon, wparam, lparam):
+                # Route both left double-click (WM_LBUTTONDBLCLK) and click (WM_LBUTTONUP) to default action
+                if lparam in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
+                    self_icon()
+                elif self_icon._menu_handle and lparam == pystray_win32.win32.WM_RBUTTONUP:
+                    orig_on_notify(self_icon, wparam, lparam)
+                else:
+                    orig_on_notify(self_icon, wparam, lparam)
+
+            pystray_win32.Icon._on_notify = _patched_on_notify
+            logger.debug("pystray Win32 double-click and click handling instrumented.")
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Could not patch pystray _on_notify: %s", exc)
+
 
 class SystemTrayManager:
     """Manages pystray icon lifecycle in a dedicated thread."""
@@ -122,7 +142,7 @@ class SystemTrayManager:
         engine_type: AudioEngineType = AudioEngineType.CLOUD,
         vad_mode: VADMode = VADMode.SILERO,
         hotkey_dictation: str = "win+space",
-        hotkey_settings: str = "ctrl+alt+s",
+        hotkey_settings: str = "",
     ) -> None:
         self.root = root
         self.on_shutdown = on_shutdown
@@ -145,7 +165,7 @@ class SystemTrayManager:
             pystray.MenuItem(self._get_engine_label, None, enabled=False),
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("⚙️ Configuración...", self._on_settings_clicked),
+            pystray.MenuItem("⚙️ Configuración...", self._on_settings_clicked, default=True),
             pystray.MenuItem("Abrir Logs", self._on_open_logs),
             pystray.MenuItem("Salir", self._on_exit_clicked),
         )
@@ -195,7 +215,7 @@ class SystemTrayManager:
                 try:
                     self.icon.notify(
                         title="MorocoVoice Activo 🎙️",
-                        message=f"Presiona {self.hotkey_dictation} para dictar o clic derecho para Configuración.",
+                        message=f"Presiona {self.hotkey_dictation} para dictar o doble clic para Configuración.",
                     )
                 except Exception:
                     pass

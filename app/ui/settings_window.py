@@ -1,8 +1,8 @@
 """Visual settings modal window for MorocoVoice.
 
 Spotify-inspired dark theme UI with a wide 2-column layout (zero unnecessary scroll),
-fluid pill tabs, custom dark inputs, direct synchronization to config.json,
-and rock-solid in-dock status notifications.
+modern keycap chips, interactive shortcut recorder, dark ttk selectors, direct synchronization to config.json,
+and crash-proof in-dock status notifications.
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ logger = get_logger("settings_ui")
 COLOR_CANVAS = "#121212"        # Base canvas background
 COLOR_PANEL = "#181818"         # Elevated card / panel background
 COLOR_PANEL_HOVER = "#242424"   # Hover state for cards / pills
+COLOR_CARD_BORDER = "#282828"   # Subtle card outline
 COLOR_INPUT_BG = "#222222"      # Input fields and selectors
 COLOR_INPUT_BORDER = "#333333"  # Subtle input outline
 COLOR_INPUT_FOCUS = "#1DB954"   # Active input border (Spotify green)
@@ -36,6 +37,8 @@ COLOR_TEXT_MUTED = "#B3B3B3"    # Subtitles and descriptions
 COLOR_TEXT_HINT = "#727272"     # Captions and placeholders
 COLOR_DANGER = "#F15E6C"        # Error state
 COLOR_GOLD = "#FECA66"          # Telat accent
+COLOR_CHIP_BG = "#282828"       # Keycap chip background
+COLOR_CHIP_BORDER = "#3A3A3A"   # Keycap chip border
 
 RECOMMENDED_VOCABULARY: list[str] = [
     "GitHub",
@@ -69,6 +72,34 @@ RECOMMENDED_VOCABULARY: list[str] = [
     "MorocoVoice",
     "Backend",
 ]
+
+
+def _bind_hover(
+    widget: tk.Widget,
+    normal_bg: str,
+    hover_bg: str,
+    normal_fg: str | None = None,
+    hover_fg: str | None = None,
+) -> None:
+    """Attach subtle hover transitions to buttons and pills."""
+    def on_enter(_: tk.Event) -> None:
+        try:
+            widget.configure(bg=hover_bg)
+            if hover_fg:
+                widget.configure(fg=hover_fg)
+        except Exception:
+            pass
+
+    def on_leave(_: tk.Event) -> None:
+        try:
+            widget.configure(bg=normal_bg)
+            if normal_fg:
+                widget.configure(fg=normal_fg)
+        except Exception:
+            pass
+
+    widget.bind("<Enter>", on_enter)
+    widget.bind("<Leave>", on_leave)
 
 
 def _persist_groq_api_key_to_env(env_path: Path, api_key: str) -> None:
@@ -165,6 +196,10 @@ class SettingsModal:
         self.btn_tab_general: tk.Button | None = None
         self.btn_tab_vocab: tk.Button | None = None
 
+        # Keycap preview frames
+        self.keycaps_dictation_frame: tk.Frame | None = None
+        self.keycaps_rewrite_frame: tk.Frame | None = None
+
     def _sync_inputs_from_config(self, cfg: AppConfig) -> None:
         """Populate all Tkinter variables directly from the passed config object."""
         self.var_dictation.set(cfg.hotkey_dictation or "win+space")
@@ -191,6 +226,7 @@ class SettingsModal:
             self.window.lift()
             self.window.focus_force()
             self._load_current_vocabulary_into_ui()
+            self._refresh_all_keycaps()
             return
 
         self.window = tk.Toplevel(self.parent)
@@ -206,7 +242,51 @@ class SettingsModal:
         self.window.bind("<Escape>", lambda e: self._on_cancel())
 
         self._center_window()
+        self._setup_ttk_styles()
         self._build_ui()
+        self._refresh_all_keycaps()
+
+    def _setup_ttk_styles(self) -> None:
+        """Apply dark Spotify styling to ttk widgets using clam theme."""
+        try:
+            style = ttk.Style()
+            if "clam" in style.theme_names():
+                style.theme_use("clam")
+
+            # Configure Dark.TCombobox
+            style.configure(
+                "Dark.TCombobox",
+                fieldbackground=COLOR_INPUT_BG,
+                background=COLOR_PANEL_HOVER,
+                foreground=COLOR_TEXT_WHITE,
+                darkcolor=COLOR_INPUT_BORDER,
+                lightcolor=COLOR_INPUT_BORDER,
+                bordercolor=COLOR_INPUT_BORDER,
+                arrowcolor=COLOR_SPOTIFY,
+                arrowsize=13,
+                padding=6,
+                relief="flat",
+            )
+            style.map(
+                "Dark.TCombobox",
+                fieldbackground=[("readonly", COLOR_INPUT_BG), ("focus", COLOR_INPUT_BG)],
+                foreground=[("readonly", COLOR_TEXT_WHITE)],
+                bordercolor=[("focus", COLOR_SPOTIFY)],
+                lightcolor=[("focus", COLOR_SPOTIFY)],
+                darkcolor=[("focus", COLOR_SPOTIFY)],
+                arrowcolor=[("active", COLOR_SPOTIFY_HOVER), ("focus", COLOR_SPOTIFY)],
+            )
+
+            # Dropdown popup listbox dark theme options
+            self.window.option_add("*TCombobox*Listbox.background", "#1A1A1A")
+            self.window.option_add("*TCombobox*Listbox.foreground", COLOR_TEXT_WHITE)
+            self.window.option_add("*TCombobox*Listbox.selectBackground", COLOR_SPOTIFY)
+            self.window.option_add("*TCombobox*Listbox.selectForeground", "#000000")
+            self.window.option_add("*TCombobox*Listbox.font", ("Segoe UI", 9))
+            self.window.option_add("*TCombobox*Listbox.relief", "flat")
+            self.window.option_add("*TCombobox*Listbox.borderWidth", "0")
+        except Exception as e:
+            logger.debug("TTK styling setup note: %s", e)
 
     def _center_window(self) -> None:
         """Center the modal on the current display monitor."""
@@ -222,20 +302,23 @@ class SettingsModal:
     def _build_ui(self) -> None:
         """Build the Spotify-style dark 2-column interface."""
         # 1. Top Header Banner
-        header = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
+        header = tk.Frame(self.window, bg=COLOR_PANEL, height=68)
         header.pack(fill=tk.X, side=tk.TOP)
 
         brand_frame = tk.Frame(header, bg=COLOR_PANEL)
         brand_frame.pack(side=tk.LEFT, padx=24, pady=12)
 
+        icon_badge = tk.Frame(brand_frame, bg="#242424", padx=8, pady=6, highlightthickness=1, highlightbackground=COLOR_CARD_BORDER)
+        icon_badge.pack(side=tk.LEFT, padx=(0, 14))
+
         icon_dot = tk.Label(
-            brand_frame,
+            icon_badge,
             text="🎙️",
-            font=("Segoe UI", 16),
-            bg=COLOR_PANEL,
+            font=("Segoe UI", 14),
+            bg="#242424",
             fg=COLOR_SPOTIFY,
         )
-        icon_dot.pack(side=tk.LEFT, padx=(0, 12))
+        icon_dot.pack()
 
         title_box = tk.Frame(brand_frame, bg=COLOR_PANEL)
         title_box.pack(side=tk.LEFT)
@@ -264,12 +347,17 @@ class SettingsModal:
             bg=COLOR_PANEL_HOVER,
             padx=12,
             pady=4,
+            highlightthickness=1,
+            highlightbackground=COLOR_CARD_BORDER,
         )
         version_pill.pack(side=tk.RIGHT, padx=24, pady=16)
 
+        # Header separator
+        tk.Frame(self.window, bg=COLOR_CARD_BORDER, height=1).pack(fill=tk.X, side=tk.TOP)
+
         # 2. Spotify Pill Navigation Bar
         nav_bar = tk.Frame(self.window, bg=COLOR_CANVAS, height=44)
-        nav_bar.pack(fill=tk.X, padx=24, pady=(14, 8))
+        nav_bar.pack(fill=tk.X, padx=24, pady=(14, 10))
 
         self.btn_tab_general = tk.Button(
             nav_bar,
@@ -277,11 +365,12 @@ class SettingsModal:
             font=("Segoe UI", 9, "bold"),
             relief=tk.FLAT,
             cursor="hand2",
-            padx=18,
-            pady=6,
+            padx=20,
+            pady=7,
             command=lambda: self._switch_tab("general"),
         )
-        self.btn_tab_general.pack(side=tk.LEFT, padx=(0, 8))
+        self.btn_tab_general.pack(side=tk.LEFT, padx=(0, 10))
+        _bind_hover(self.btn_tab_general, COLOR_SPOTIFY, COLOR_SPOTIFY_HOVER)
 
         self.btn_tab_vocab = tk.Button(
             nav_bar,
@@ -289,14 +378,15 @@ class SettingsModal:
             font=("Segoe UI", 9, "bold"),
             relief=tk.FLAT,
             cursor="hand2",
-            padx=18,
-            pady=6,
+            padx=20,
+            pady=7,
             command=lambda: self._switch_tab("vocab"),
         )
         self.btn_tab_vocab.pack(side=tk.LEFT)
+        _bind_hover(self.btn_tab_vocab, COLOR_PANEL, COLOR_PANEL_HOVER, COLOR_TEXT_MUTED, COLOR_TEXT_WHITE)
 
         # 3. Bottom Dock Action Bar
-        sep_bottom = tk.Frame(self.window, bg="#242424", height=1)
+        sep_bottom = tk.Frame(self.window, bg=COLOR_CARD_BORDER, height=1)
         sep_bottom.pack(fill=tk.X, side=tk.BOTTOM)
 
         dock = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
@@ -305,18 +395,19 @@ class SettingsModal:
         btn_open_json = tk.Button(
             dock,
             text="📄 Editar config.json",
-            font=("Segoe UI", 8),
+            font=("Segoe UI", 9),
             bg=COLOR_INPUT_BG,
             fg=COLOR_TEXT_MUTED,
             activebackground=COLOR_PANEL_HOVER,
             activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
-            padx=14,
-            pady=6,
+            padx=16,
+            pady=7,
             command=self._on_open_json,
         )
         btn_open_json.pack(side=tk.LEFT, padx=24, pady=14)
+        _bind_hover(btn_open_json, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_MUTED, COLOR_TEXT_WHITE)
 
         # In-dock persistent status / toast label (Crash-proof, zero DOM re-packing)
         self.toast_lbl = tk.Label(
@@ -339,11 +430,12 @@ class SettingsModal:
             activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
-            padx=16,
-            pady=6,
+            padx=18,
+            pady=7,
             command=self._on_cancel,
         )
-        btn_cancel.pack(side=tk.RIGHT, padx=(6, 24), pady=14)
+        btn_cancel.pack(side=tk.RIGHT, padx=(8, 24), pady=14)
+        _bind_hover(btn_cancel, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
 
         btn_save = tk.Button(
             dock,
@@ -355,11 +447,12 @@ class SettingsModal:
             activeforeground="#000000",
             relief=tk.FLAT,
             cursor="hand2",
-            padx=20,
-            pady=6,
+            padx=22,
+            pady=7,
             command=self._on_save,
         )
-        btn_save.pack(side=tk.RIGHT, padx=6, pady=14)
+        btn_save.pack(side=tk.RIGHT, padx=8, pady=14)
+        _bind_hover(btn_save, COLOR_SPOTIFY, COLOR_SPOTIFY_HOVER, "#000000", "#000000")
 
         # 4. Central Content Container
         content_container = tk.Frame(self.window, bg=COLOR_CANVAS)
@@ -429,13 +522,13 @@ class SettingsModal:
         card_shortcuts = self._create_card(
             col_left, "⌨️ Atajos de Teclado", "Solo 2 atajos oficiales: hablar y corregir selección."
         )
-        self._create_entry_row(
+        self.keycaps_dictation_frame = self._create_hotkey_row(
             card_shortcuts,
             label="Dictado Inteligente:",
             var=self.var_dictation,
             help_text="Habla y transcribe texto en cualquier app activa (default: win+space)",
         )
-        self._create_entry_row(
+        self.keycaps_rewrite_frame = self._create_hotkey_row(
             card_shortcuts,
             label="Reescritura Contextual:",
             var=self.var_rewrite,
@@ -446,16 +539,18 @@ class SettingsModal:
         card_behavior = self._create_card(
             col_left, "⚡ Comportamiento y Portapapeles", "Parámetros de corte de audio y retardo de pegado."
         )
-        self._create_entry_row(
+        self._create_unit_entry_row(
             card_behavior,
-            label="Máx. Grabación (seg):",
+            label="Máx. Grabación:",
             var=self.var_max_sec,
+            unit="segundos",
             help_text="Límite máximo por dictado antes de corte automático (default: 60)",
         )
-        self._create_entry_row(
+        self._create_unit_entry_row(
             card_behavior,
-            label="Retardo Pegado (ms):",
+            label="Retardo Pegado:",
             var=self.var_delay_ms,
+            unit="milisegundos",
             help_text="Retardo post-inyección para estabilidad de portapapeles (default: 80)",
         )
 
@@ -463,7 +558,7 @@ class SettingsModal:
         card_engine = self._create_card(
             col_right, "🧠 Motor y Modelos de Inferencia", "Configura la transcripción por voz y el modelo LLM."
         )
-        
+
         # Engine Combobox
         self._create_combobox_row(
             card_engine,
@@ -491,7 +586,7 @@ class SettingsModal:
         # 1-Click Key helper link
         groq_link_row = tk.Frame(card_engine, bg=COLOR_PANEL)
         groq_link_row.pack(fill=tk.X, pady=(2, 6))
-        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=20).pack(side=tk.LEFT)
+        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=18).pack(side=tk.LEFT)
         btn_get_key = tk.Button(
             groq_link_row,
             text="🔑 Obtener clave gratuita en console.groq.com (1 clic)",
@@ -505,6 +600,7 @@ class SettingsModal:
             command=lambda: webbrowser.open("https://console.groq.com/keys"),
         )
         btn_get_key.pack(side=tk.LEFT)
+        _bind_hover(btn_get_key, COLOR_PANEL, COLOR_PANEL, COLOR_SPOTIFY, COLOR_SPOTIFY_HOVER)
 
         # STT Model
         self._create_entry_row(
@@ -538,6 +634,8 @@ class SettingsModal:
             font=("Segoe UI", 9, "bold"),
             fg=COLOR_SPOTIFY,
             bg=COLOR_PANEL,
+            padx=8,
+            pady=3,
         )
         self.vocab_counter_lbl.pack(side=tk.LEFT)
 
@@ -550,18 +648,24 @@ class SettingsModal:
             activeforeground=COLOR_TEXT_WHITE,
             activebackground=COLOR_PANEL_HOVER,
             relief=tk.FLAT,
-            padx=10,
-            pady=3,
+            padx=12,
+            pady=4,
             cursor="hand2",
             command=self._restore_recommended_vocabulary,
         )
         btn_restore.pack(side=tk.RIGHT)
+        _bind_hover(btn_restore, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_GOLD, COLOR_TEXT_WHITE)
 
         # Text editor container
-        text_container = tk.Frame(card_vocab, bg=COLOR_INPUT_BG, highlightthickness=1, highlightbackground=COLOR_INPUT_BORDER)
+        text_container = tk.Frame(
+            card_vocab,
+            bg=COLOR_INPUT_BG,
+            highlightthickness=1,
+            highlightbackground=COLOR_CARD_BORDER,
+        )
         text_container.pack(fill=tk.BOTH, expand=True, pady=4)
 
-        scrollbar = tk.Scrollbar(text_container)
+        scrollbar = tk.Scrollbar(text_container, bg=COLOR_PANEL, troughcolor=COLOR_CANVAS)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.vocab_text = tk.Text(
@@ -571,8 +675,8 @@ class SettingsModal:
             fg=COLOR_TEXT_WHITE,
             insertbackground=COLOR_SPOTIFY,
             relief=tk.FLAT,
-            padx=10,
-            pady=10,
+            padx=12,
+            pady=12,
             yscrollcommand=scrollbar.set,
         )
         self.vocab_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -582,14 +686,14 @@ class SettingsModal:
         self.vocab_text.bind("<KeyRelease>", lambda e: self._update_vocab_counter())
 
     def _create_card(self, parent: tk.Frame, title: str, subtitle: str = "") -> tk.Frame:
-        """Create a rounded Spotify-style card with header."""
+        """Create an elevated Spotify-style card with subtle border and crisp headers."""
         outer = tk.Frame(
             parent,
             bg=COLOR_PANEL,
-            padx=18,
+            padx=20,
             pady=16,
             highlightthickness=1,
-            highlightbackground="#242424",
+            highlightbackground=COLOR_CARD_BORDER,
         )
         outer.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
 
@@ -610,18 +714,65 @@ class SettingsModal:
                 fg=COLOR_TEXT_MUTED,
                 bg=COLOR_PANEL,
                 anchor="w",
-            ).pack(fill=tk.X, pady=(1, 8))
+            ).pack(fill=tk.X, pady=(2, 10))
         else:
-            tk.Frame(outer, height=4, bg=COLOR_PANEL).pack()
+            tk.Frame(outer, height=6, bg=COLOR_PANEL).pack()
 
         return outer
 
-    def _create_entry_row(
-        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
-    ) -> None:
-        """Create an entry row with Spotify dark styling."""
+    def _render_keycap_chips(self, container: tk.Frame, hotkey_str: str) -> None:
+        """Render stylish pill keycaps for each key in the hotkey combination."""
+        for w in container.winfo_children():
+            w.destroy()
+
+        tokens = [t.strip().upper() for t in hotkey_str.split("+") if t.strip()]
+        if not tokens:
+            tk.Label(
+                container,
+                text="(sin asignar)",
+                font=("Segoe UI", 8),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+            ).pack(side=tk.LEFT)
+            return
+
+        for i, tok in enumerate(tokens):
+            if i > 0:
+                tk.Label(
+                    container,
+                    text="+",
+                    font=("Segoe UI", 8, "bold"),
+                    fg=COLOR_TEXT_MUTED,
+                    bg=COLOR_PANEL,
+                ).pack(side=tk.LEFT, padx=3)
+
+            chip = tk.Label(
+                container,
+                text=tok,
+                font=("Segoe UI", 8, "bold"),
+                fg=COLOR_TEXT_WHITE,
+                bg=COLOR_CHIP_BG,
+                padx=7,
+                pady=2,
+                relief=tk.FLAT,
+                highlightthickness=1,
+                highlightbackground=COLOR_CHIP_BORDER,
+            )
+            chip.pack(side=tk.LEFT, padx=1)
+
+    def _refresh_all_keycaps(self) -> None:
+        """Update both hotkey keycap preview containers."""
+        if self.keycaps_dictation_frame:
+            self._render_keycap_chips(self.keycaps_dictation_frame, self.var_dictation.get())
+        if self.keycaps_rewrite_frame:
+            self._render_keycap_chips(self.keycaps_rewrite_frame, self.var_rewrite.get())
+
+    def _create_hotkey_row(
+        self, parent: tk.Frame, label: str, var: tk.StringVar, help_text: str = ""
+    ) -> tk.Frame:
+        """Create an interactive hotkey configuration row with live keycap chips and capture button."""
         row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=4)
+        row.pack(fill=tk.X, pady=5)
 
         tk.Label(
             row,
@@ -629,7 +780,218 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=20,
+            width=18,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        outer_container = tk.Frame(row, bg=COLOR_PANEL)
+        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        controls_box = tk.Frame(outer_container, bg=COLOR_PANEL)
+        controls_box.pack(fill=tk.X)
+
+        entry = tk.Entry(
+            controls_box,
+            textvariable=var,
+            font=("Segoe UI", 9),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            insertbackground=COLOR_SPOTIFY,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=COLOR_INPUT_BORDER,
+            highlightcolor=COLOR_INPUT_FOCUS,
+            width=16,
+        )
+        entry.pack(side=tk.LEFT, ipady=4)
+
+        # Chips container
+        chips_frame = tk.Frame(controls_box, bg=COLOR_PANEL)
+        chips_frame.pack(side=tk.LEFT, padx=8)
+
+        # Initial render of keycaps
+        self._render_keycap_chips(chips_frame, var.get())
+
+        # Update keycaps live when user edits entry manually
+        entry.bind("<KeyRelease>", lambda e: self._render_keycap_chips(chips_frame, var.get()))
+
+        # Interactive Capture Button
+        btn_capture = tk.Button(
+            controls_box,
+            text="Capturar",
+            font=("Segoe UI", 8, "bold"),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            activebackground=COLOR_PANEL_HOVER,
+            activeforeground=COLOR_TEXT_WHITE,
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=10,
+            pady=2,
+        )
+        btn_capture.pack(side=tk.RIGHT)
+        _bind_hover(btn_capture, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
+
+        def start_capture() -> None:
+            btn_capture.configure(
+                text="● Presiona teclas...",
+                bg=COLOR_GOLD,
+                fg="#000000",
+            )
+            captured_keys: list[str] = []
+
+            def on_key(event: tk.Event) -> str:
+                sym = event.keysym.lower()
+                if sym == "escape":
+                    cleanup()
+                    return "break"
+
+                mod_map = {
+                    "control_l": "ctrl",
+                    "control_r": "ctrl",
+                    "shift_l": "shift",
+                    "shift_r": "shift",
+                    "alt_l": "alt",
+                    "alt_r": "alt",
+                    "win_l": "win",
+                    "win_r": "win",
+                    "super_l": "win",
+                    "super_r": "win",
+                }
+
+                current_mods: list[str] = []
+                state = int(event.state)
+                # Tkinter event.state bitmask: 0x4 = Control, 0x1 = Shift, 0x20000 / 0x8 = Alt
+                if state & 0x4 or sym in ("control_l", "control_r"):
+                    if "ctrl" not in current_mods:
+                        current_mods.append("ctrl")
+                if state & 0x1 or sym in ("shift_l", "shift_r"):
+                    if "shift" not in current_mods:
+                        current_mods.append("shift")
+                if state & 0x8 or state & 0x20000 or sym in ("alt_l", "alt_r"):
+                    if "alt" not in current_mods:
+                        current_mods.append("alt")
+
+                key_name = mod_map.get(sym, sym)
+                if key_name not in ("ctrl", "shift", "alt", "win"):
+                    # Non-modifier key was pressed: finalize shortcut!
+                    combo_parts = list(current_mods)
+                    if key_name not in combo_parts:
+                        combo_parts.append(key_name)
+                    final_combo = "+".join(combo_parts)
+                    var.set(final_combo)
+                    self._render_keycap_chips(chips_frame, final_combo)
+                    cleanup()
+                    return "break"
+                return "break"
+
+            def cleanup() -> None:
+                try:
+                    btn_capture.unbind("<KeyPress>")
+                    self.window.unbind("<KeyPress>")
+                except Exception:
+                    pass
+                btn_capture.configure(
+                    text="Capturar",
+                    bg=COLOR_INPUT_BG,
+                    fg=COLOR_TEXT_WHITE,
+                )
+                self.window.bind("<Escape>", lambda e: self._on_cancel())
+
+            self.window.unbind("<Escape>")
+            btn_capture.focus_set()
+            btn_capture.bind("<KeyPress>", on_key)
+            self.window.bind("<KeyPress>", on_key)
+
+        btn_capture.configure(command=start_capture)
+
+        if help_text:
+            tk.Label(
+                outer_container,
+                text=help_text,
+                font=("Segoe UI", 7),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
+
+        return chips_frame
+
+    def _create_unit_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, unit: str, help_text: str = ""
+    ) -> None:
+        """Create a numeric entry row with adjacent unit pill."""
+        row = tk.Frame(parent, bg=COLOR_PANEL)
+        row.pack(fill=tk.X, pady=5)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            width=18,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        outer_container = tk.Frame(row, bg=COLOR_PANEL)
+        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        entry_box = tk.Frame(outer_container, bg=COLOR_PANEL)
+        entry_box.pack(fill=tk.X)
+
+        entry = tk.Entry(
+            entry_box,
+            textvariable=var,
+            font=("Segoe UI", 9),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            insertbackground=COLOR_SPOTIFY,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=COLOR_INPUT_BORDER,
+            highlightcolor=COLOR_INPUT_FOCUS,
+            width=12,
+        )
+        entry.pack(side=tk.LEFT, ipady=4)
+
+        unit_pill = tk.Label(
+            entry_box,
+            text=unit,
+            font=("Segoe UI", 8),
+            fg=COLOR_TEXT_MUTED,
+            bg=COLOR_INPUT_BG,
+            padx=8,
+            pady=3,
+            highlightthickness=1,
+            highlightbackground=COLOR_CARD_BORDER,
+        )
+        unit_pill.pack(side=tk.LEFT, padx=8)
+
+        if help_text:
+            tk.Label(
+                outer_container,
+                text=help_text,
+                font=("Segoe UI", 7),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
+
+    def _create_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
+    ) -> None:
+        """Create a clean dark text entry row."""
+        row = tk.Frame(parent, bg=COLOR_PANEL)
+        row.pack(fill=tk.X, pady=5)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            width=18,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -648,7 +1010,7 @@ class SettingsModal:
             highlightbackground=COLOR_INPUT_BORDER,
             highlightcolor=COLOR_INPUT_FOCUS,
         )
-        entry.pack(fill=tk.X, expand=True, ipady=3)
+        entry.pack(fill=tk.X, expand=True, ipady=4)
 
         if help_text:
             tk.Label(
@@ -665,7 +1027,7 @@ class SettingsModal:
     ) -> None:
         """Create a masked password/API-key entry with toggle eye button."""
         row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=4)
+        row.pack(fill=tk.X, pady=5)
 
         tk.Label(
             row,
@@ -673,7 +1035,7 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=20,
+            width=18,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -696,7 +1058,7 @@ class SettingsModal:
             highlightcolor=COLOR_INPUT_FOCUS,
             show="*",
         )
-        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4)
 
         is_visible = [False]
 
@@ -714,17 +1076,18 @@ class SettingsModal:
             entry_container,
             text="👁️",
             font=("Segoe UI", 8),
-            bg=COLOR_PANEL_HOVER,
+            bg=COLOR_INPUT_BG,
             fg=COLOR_TEXT_WHITE,
-            activebackground="#333333",
+            activebackground=COLOR_PANEL_HOVER,
             activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
-            padx=6,
-            pady=2,
+            padx=8,
+            pady=3,
             cursor="hand2",
             command=toggle_mask,
         )
         eye_btn.pack(side=tk.LEFT, padx=(6, 0))
+        _bind_hover(eye_btn, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
 
         if help_text:
             tk.Label(
@@ -739,9 +1102,9 @@ class SettingsModal:
     def _create_combobox_row(
         self, parent: tk.Frame, label: str, var: tk.Variable, values: list[str], help_text: str = ""
     ) -> None:
-        """Create a Combobox row with dark styling."""
+        """Create a Combobox row with Dark.TCombobox styling."""
         row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=4)
+        row.pack(fill=tk.X, pady=5)
 
         tk.Label(
             row,
@@ -749,7 +1112,7 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=20,
+            width=18,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -761,6 +1124,7 @@ class SettingsModal:
             textvariable=var,
             values=values,
             state="readonly",
+            style="Dark.TCombobox",
         )
         combo.pack(fill=tk.X, expand=True)
 
@@ -834,12 +1198,16 @@ class SettingsModal:
             return
         fg_col = COLOR_DANGER if is_error else COLOR_SPOTIFY
         self.toast_lbl.configure(text=message, fg=fg_col)
-        self.window.after(4000, self._hide_toast)
+        if self.window and self.window.winfo_exists():
+            self.window.after(4000, self._hide_toast)
 
     def _hide_toast(self) -> None:
         """Clear inline status notification."""
         if self.toast_lbl:
-            self.toast_lbl.configure(text="")
+            try:
+                self.toast_lbl.configure(text="")
+            except Exception:
+                pass
 
     def _on_open_json(self) -> None:
         """Open config.json directly in Notepad for raw inspection."""
@@ -941,7 +1309,7 @@ class SettingsModal:
                 except Exception:
                     pass
 
-            # Update ONLY user settings, keeping extra hotkeys empty/clean
+            # Update ONLY user settings, strictly keeping extra hotkeys empty
             cfg_dict.update({
                 "hotkey_dictation": dictation_val,
                 "hotkey_rewrite": rewrite_val,
@@ -967,7 +1335,7 @@ class SettingsModal:
                 _persist_groq_api_key_to_env(env_path, groq_key_val)
                 os.environ["GROQ_API_KEY"] = groq_key_val
 
-            # CRITICAL: Construct new AppConfig and update modal internal state immediately!
+            # Construct new AppConfig and update modal internal state immediately
             from app.config import load_config
             new_config = load_config(self.config_path)
             self.current_config = new_config
@@ -977,7 +1345,8 @@ class SettingsModal:
 
             # Spotify-style non-intrusive feedback
             self._show_toast(f"✓ Guardado: Dictado ({dictation_val}) | Reescritura ({rewrite_val})")
-            self.window.after(1100, self._on_cancel)
+            if self.window:
+                self.window.after(1100, self._on_cancel)
 
         except Exception as e:
             logger.error("Failed to save settings: %s", e)

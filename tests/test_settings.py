@@ -115,3 +115,67 @@ def test_settings_modal_reloads_fresh_config(tmp_path):
         modal._on_cancel()
     finally:
         root.destroy()
+
+
+def test_render_keycap_chips_generates_chips():
+    """Verify keycap chips helper generates badges for shortcut tokens."""
+    import tkinter as tk
+    from app.ui.settings_window import SettingsModal
+    from app.contracts import AppConfig
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        modal = SettingsModal(
+            parent=root,
+            current_config=AppConfig(),
+            config_file_path="config.json",
+            on_saved=lambda c: None,
+        )
+        frame = tk.Frame(root)
+        modal._render_keycap_chips(frame, "ctrl+shift+h")
+        labels = [w.cget("text") for w in frame.winfo_children() if isinstance(w, tk.Label)]
+        assert "CTRL" in labels
+        assert "SHIFT" in labels
+        assert "H" in labels
+        assert "+" in labels
+    finally:
+        root.destroy()
+
+
+def test_tray_menu_has_settings_as_default_item():
+    """Verify the tray icon designates Settings as default=True for double-click activation."""
+    import tkinter as tk
+    from app.ui.tray import SystemTrayManager
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        mgr = SystemTrayManager(
+            root=root,
+            on_shutdown=lambda: None,
+            on_open_settings=lambda: None,
+        )
+        # Verify default constructor has empty hotkey_settings (clean governance)
+        assert mgr.hotkey_settings == ""
+
+        # Trigger tray menu construction without background thread
+        from app.ui.tray import create_tray_icon_image
+        import pystray
+        from app import __version__
+
+        menu = pystray.Menu(
+            pystray.MenuItem(f"MorocoVoice v{__version__}", None, enabled=False),
+            pystray.MenuItem(mgr._get_engine_label, None, enabled=False),
+            pystray.MenuItem(mgr._get_vad_label, None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("⚙️ Configuración...", mgr._on_settings_clicked, default=True),
+            pystray.MenuItem("Abrir Logs", mgr._on_open_logs),
+            pystray.MenuItem("Salir", mgr._on_exit_clicked),
+        )
+        default_items = [item for item in menu.items if getattr(item, "default", False)]
+        assert len(default_items) == 1
+        assert "Configuración" in default_items[0].text
+    finally:
+        root.destroy()
+

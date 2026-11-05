@@ -140,11 +140,11 @@ class HotkeyListener:
 
     def __init__(
         self,
-        hotkey_dictation: str = "ctrl+alt+space",
+        hotkey_dictation: str = "win+space",
         hotkey_rewrite: str = "ctrl+shift+space",
-        hotkey_shutdown: str = "ctrl+shift+q",
-        hotkey_diagnostics: str = "ctrl+shift+d",
-        hotkey_settings: str = "ctrl+alt+s",
+        hotkey_shutdown: str = "",
+        hotkey_diagnostics: str = "",
+        hotkey_settings: str = "",
         on_dictate_toggle: Callable[[], None] | None = None,
         on_rewrite_trigger: Callable[[], None] | None = None,
         on_shutdown_trigger: Callable[[], None] | None = None,
