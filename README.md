@@ -76,16 +76,13 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 
 | Atajo | Función | Modo de Uso |
 | :--- | :--- | :--- |
-| **`Win + Space`** | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
+| **`Win + Space`** *(o configurable)* | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
-| **`Ctrl + Alt + S`** | **Abrir Configuración** | Vía de teclado a la ventana de configuración. Existe porque el icono de la bandeja puede no estar disponible (Windows 11 esconde los iconos nuevos en el cajón `^`, y un entorno restringido puede rechazarlos). Nunca te deja sin acceso. |
-| **`Ctrl + Shift + D`** | **Diagnóstico (Logs)** | Abre `morocovoice.log` en el Bloc de notas para inspeccionar qué está pasando. |
 
-> 💡 *El icono de la bandeja del sistema (junto al reloj) ofrece el menú completo: Configuración, Abrir Logs y Salir. Si no lo ves, búscalo en el cajón de desbordamiento `^` y arrástralo hacia fuera — o usa `Ctrl + Alt + S`.*
->
-> ⚠️ **`Win + Space` es también el atajo nativo de Windows para cambiar de idioma de teclado.** MorocoVoice lo escucha sin suprimirlo, así que en equipos con más de un idioma instalado conviene cambiar el atajo de dictado por otro libre (por ejemplo `Ctrl + Alt + Space`) desde la ventana de Configuración.
+> 💡 *Acceso rápido a Configuración: Haz **doble clic** (o clic derecho) en el icono de la pluma en la bandeja del sistema junto al reloj de Windows para abrir el panel visual o editar `config.json`.*
 
----
+> ⚠️ **`Win + Space` es también el atajo nativo de Windows para cambiar de idioma de teclado.** MorocoVoice lo escucha sin suprimirlo, así que en equipos con más de un idioma instalado conviene cambiar el atajo de dictado por otro libre (por ejemplo `Ctrl + Shift + H`) desde la ventana de Configuración.*
+
 
 ## 🖥️ Modos de Inferencia: Cloud First o 100% Local
 

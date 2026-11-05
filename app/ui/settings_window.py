@@ -1338,12 +1338,12 @@ class SettingsModal:
                 except Exception:
                     pass
 
-            # Update ONLY user settings, strictly keeping extra hotkeys empty
+            # Update user settings and clean legacy keys
+            cfg_dict.pop("hotkey_settings", None)
+            cfg_dict.pop("hotkey_diagnostics", None)
             cfg_dict.update({
                 "hotkey_dictation": dictation_val,
                 "hotkey_rewrite": rewrite_val,
-                "hotkey_settings": "",
-                "hotkey_diagnostics": "",
                 "engine": engine_type.value,
                 "stt_language": stt_lang,
                 "groq_stt_model": stt_model,

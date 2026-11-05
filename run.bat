@@ -131,9 +131,8 @@ echo * Verificando y cerrando instancias previas de MorocoVoice...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 600" >nul 2>&1
 
 REM 4. Arranque en Pantalla y Segundo Plano
-echo * Lanzando MorocoVoice...
-echo * Atajo de Dictado: Win + Space
-echo * Atajo de Reescritura: Ctrl + Shift + Space
+echo * Lanzando MorocoVoice en segundo plano...
+echo * Doble clic en icono de bandeja para abrir opciones.
 echo.
 
 start "" ".venv\Scripts\pythonw.exe" -m app.main
