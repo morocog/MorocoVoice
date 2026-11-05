@@ -67,3 +67,4 @@ rootdir: c:\Users\moroc\Documents\GitHub\MorocoVoice
 ```
 **Resultado:** 58 de 58 pruebas aprobadas, 0 advertencias, 0 errores.
 El estado del proyecto pasa a: **APROBADO BAJO PROTOCOLO EGM**.
+
