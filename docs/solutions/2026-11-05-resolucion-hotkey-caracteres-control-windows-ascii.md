@@ -47,3 +47,4 @@ En el sistema operativo Windows, el hook de bajo nivel de teclado (`WH_KEYBOARD_
    * Mapeo de `espacio`, `barra`, `intro`, `escape` a sus identificadores estándar de teclado.
 5. **Pruebas unitarias:**
    * Se agregaron pruebas en `tests/test_hotkey.py` simulando la emisión de códigos de control ASCII de Windows (`\x13`, `\x08`) y la verificación con `HotkeyListener` en vivo.
+
