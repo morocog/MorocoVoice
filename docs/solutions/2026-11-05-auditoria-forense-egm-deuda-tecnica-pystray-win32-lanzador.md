@@ -70,3 +70,4 @@ Se diseñaron y ejecutaron 57 pruebas unitarias exhaustivas en el entorno Python
 - `test_tray_menu_has_settings_as_default_item`: Confirma que la opción de Configuración es el elemento predeterminado en el menú de bandeja.
 
 Resultado de la suite: **57 de 57 pruebas pasaron exitosamente en 6.76 segundos**.
+
