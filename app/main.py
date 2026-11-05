@@ -92,14 +92,14 @@ class MorocoVoiceApplication:
             engine_type=config.engine,
             vad_mode=self.vad.get_mode(),
             hotkey_dictation=config.hotkey_dictation,
-            hotkey_settings=config.hotkey_settings,
+            hotkey_settings="",
         )
         self.hotkeys = HotkeyListener(
             hotkey_dictation=config.hotkey_dictation,
             hotkey_rewrite=config.hotkey_rewrite,
-            hotkey_shutdown=config.hotkey_shutdown,
-            hotkey_diagnostics=config.hotkey_diagnostics,
-            hotkey_settings=config.hotkey_settings,
+            hotkey_shutdown="",
+            hotkey_diagnostics="",
+            hotkey_settings="",
             on_dictate_toggle=self.toggle_dictation,
             on_rewrite_trigger=self.trigger_rewrite,
             on_shutdown_trigger=self.shutdown_ordered,
@@ -114,14 +114,15 @@ class MorocoVoiceApplication:
     def reload_config(self, new_config: AppConfig) -> None:
         """Live hot reload of runtime configuration without restarting."""
         self.config = new_config
+        self.settings_modal.current_config = new_config
         self.recorder.max_duration_seconds = new_config.max_recording_seconds
         self.recorder.silence_cutoff_seconds = new_config.silence_threshold_seconds
         self.hotkeys.update_shortcuts(
             dictation=new_config.hotkey_dictation,
             rewrite=new_config.hotkey_rewrite,
-            shutdown=new_config.hotkey_shutdown,
-            diagnostics=new_config.hotkey_diagnostics,
-            settings=new_config.hotkey_settings,
+            shutdown="",
+            diagnostics="",
+            settings="",
         )
         # Cleanly release previous engine resources before instantiating new manager
         old_engine = self.engine_mgr

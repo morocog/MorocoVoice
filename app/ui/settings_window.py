@@ -1,7 +1,7 @@
 """Visual settings modal window for MorocoVoice.
 
-Allows users to configure shortcuts, STT/LLM engine parameters, custom technical vocabulary,
-and timing with live hotkey remapping and direct synchronization to config.json.
+Spotify-inspired dark theme UI with fluid layout, pill tabs, custom dark inputs,
+direct synchronization to config.json, and zero stale configuration caches.
 """
 
 from __future__ import annotations
@@ -19,6 +19,22 @@ from app.contracts import AppConfig, AudioEngineType
 from app.logging_setup import get_logger
 
 logger = get_logger("settings_ui")
+
+# Spotify-inspired Design System Palette
+COLOR_CANVAS = "#121212"        # Base canvas background
+COLOR_PANEL = "#181818"         # Elevated card / panel background
+COLOR_PANEL_HOVER = "#242424"   # Hover state for cards / pills
+COLOR_INPUT_BG = "#242424"      # Input fields and selectors
+COLOR_INPUT_BORDER = "#383838"  # Subtle input outline
+COLOR_INPUT_FOCUS = "#1DB954"   # Active input border (Spotify green)
+COLOR_SPOTIFY = "#1DB954"       # Primary brand green
+COLOR_SPOTIFY_HOVER = "#1ED760" # Hover green
+COLOR_SPOTIFY_ACTIVE = "#169C46"# Pressed green
+COLOR_TEXT_WHITE = "#FFFFFF"    # Crisp primary text
+COLOR_TEXT_MUTED = "#B3B3B3"    # Subtitles and descriptions
+COLOR_TEXT_HINT = "#727272"     # Captions and placeholders
+COLOR_DANGER = "#E91429"        # Error state
+COLOR_GOLD = "#FECA66"          # Telat accent
 
 RECOMMENDED_VOCABULARY: list[str] = [
     "GitHub",
@@ -110,7 +126,7 @@ def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool
 
 
 class SettingsModal:
-    """Modern dark-themed Tkinter settings modal with Telat executive styling and tabs."""
+    """Spotify-styled dark modal for MorocoVoice settings."""
 
     def __init__(
         self,
@@ -120,45 +136,83 @@ class SettingsModal:
         on_saved: Callable[[AppConfig], None],
     ) -> None:
         self.parent = parent
-        self.current_config = current_config
         self.config_path = Path(config_file_path).resolve()
+        self.current_config = current_config
         self.vocab_path = (self.config_path.parent / getattr(self.current_config, "custom_vocabulary_path", "custom_vocabulary.json")).resolve()
         self.on_saved = on_saved
 
         self.window: tk.Toplevel | None = None
         self.vocab_text: tk.Text | None = None
         self.vocab_counter_lbl: tk.Label | None = None
+        self.toast_banner: tk.Frame | None = None
+        self.toast_lbl: tk.Label | None = None
+
+        # Variables for form controls
+        self.var_dictation = tk.StringVar()
+        self.var_rewrite = tk.StringVar()
+        self.var_engine = tk.StringVar()
+        self.var_groq_api_key = tk.StringVar()
+        self.var_stt_language = tk.StringVar()
+        self.var_stt_model = tk.StringVar()
+        self.var_llm_model = tk.StringVar()
+        self.var_max_sec = tk.IntVar()
+        self.var_delay_ms = tk.IntVar()
+
+        # Tab containers
+        self.active_tab = "general"
+        self.tab_general_frame: tk.Frame | None = None
+        self.tab_vocab_frame: tk.Frame | None = None
+        self.btn_tab_general: tk.Button | None = None
+        self.btn_tab_vocab: tk.Button | None = None
+
+    def _sync_inputs_from_config(self, cfg: AppConfig) -> None:
+        """Populate all Tkinter variables directly from the passed config object."""
+        self.var_dictation.set(cfg.hotkey_dictation or "win+space")
+        self.var_rewrite.set(cfg.hotkey_rewrite or "ctrl+shift+space")
+        self.var_engine.set(cfg.engine.value if hasattr(cfg.engine, "value") else str(cfg.engine))
+        self.var_groq_api_key.set(cfg.groq_api_key or os.getenv("GROQ_API_KEY", ""))
+        self.var_stt_language.set(getattr(cfg, "stt_language", "es") or "es")
+        self.var_stt_model.set(cfg.groq_stt_model or "whisper-large-v3")
+        self.var_llm_model.set(cfg.groq_llm_model or "qwen/qwen3.8-27b")
+        self.var_max_sec.set(cfg.max_recording_seconds or 60)
+        self.var_delay_ms.set(cfg.clipboard_restore_delay_ms or 80)
 
     def show(self) -> None:
-        """Construct and display the settings modal."""
+        """Construct and display the settings modal, always reading fresh config from disk."""
+        # 1. CRITICAL: Reload fresh config from disk to eliminate stale cache bugs
+        from app.config import load_config
+        try:
+            self.current_config = load_config(self.config_path)
+        except Exception as e:
+            logger.warning("Could not refresh config on show: %s", e)
+
+        self._sync_inputs_from_config(self.current_config)
+
         if self.window is not None and self.window.winfo_exists():
             self.window.lift()
             self.window.focus_force()
+            self._load_current_vocabulary_into_ui()
             return
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("MorocoVoice - Configuración")
-        self.window.geometry("640x750")
-        self.window.minsize(600, 700)
+        self.window.geometry("680x760")
+        self.window.minsize(620, 680)
         self.window.resizable(True, True)
-        self.window.configure(bg="#18181b")
+        self.window.configure(bg=COLOR_CANVAS)
 
-        # Keep on top of other windows
         self.window.attributes("-topmost", True)
         self.window.focus_force()
-
-        # Support Escape key to close modal safely
         self.window.bind("<Escape>", lambda e: self._on_cancel())
 
-        # Center on screen
         self._center_window()
         self._build_ui()
 
     def _center_window(self) -> None:
-        """Center the modal on the current screen."""
+        """Center the modal on the current display monitor."""
         self.window.update_idletasks()
-        w = 640
-        h = 750
+        w = 680
+        h = 760
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
         x = max(0, (sw - w) // 2)
@@ -166,331 +220,347 @@ class SettingsModal:
         self.window.geometry(f"{w}x{h}+{x}+{y}")
 
     def _build_ui(self) -> None:
-        """Build the tabbed modal interface."""
-        # 1. Top banner
-        banner = tk.Frame(self.window, bg="#202023", height=56)
-        banner.pack(fill=tk.X, side=tk.TOP)
+        """Build the Spotify-style dark interface."""
+        # 1. Top Header Banner
+        header = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
+        header.pack(fill=tk.X, side=tk.TOP)
 
-        title_lbl = tk.Label(
-            banner,
-            text="⚙️ Configuración de MorocoVoice",
+        brand_frame = tk.Frame(header, bg=COLOR_PANEL)
+        brand_frame.pack(side=tk.LEFT, padx=22, pady=12)
+
+        icon_dot = tk.Label(
+            brand_frame,
+            text="🎙️",
+            font=("Segoe UI", 14),
+            bg=COLOR_PANEL,
+            fg=COLOR_SPOTIFY,
+        )
+        icon_dot.pack(side=tk.LEFT, padx=(0, 10))
+
+        title_box = tk.Frame(brand_frame, bg=COLOR_PANEL)
+        title_box.pack(side=tk.LEFT)
+
+        tk.Label(
+            title_box,
+            text="MorocoVoice",
             font=("Segoe UI", 12, "bold"),
-            fg="#FBFBFD",
-            bg="#202023",
-        )
-        title_lbl.pack(side=tk.LEFT, padx=20, pady=14)
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+        ).pack(anchor="w")
 
-        subtitle_lbl = tk.Label(
-            banner,
-            text="v1.0.4",
+        tk.Label(
+            title_box,
+            text="Preferencias de Dictado y Modelos IA",
+            font=("Segoe UI", 8),
+            fg=COLOR_TEXT_MUTED,
+            bg=COLOR_PANEL,
+        ).pack(anchor="w")
+
+        version_pill = tk.Label(
+            header,
+            text="● v1.0.5",
+            font=("Segoe UI", 8, "bold"),
+            fg=COLOR_SPOTIFY,
+            bg=COLOR_PANEL_HOVER,
+            padx=10,
+            pady=4,
+        )
+        version_pill.pack(side=tk.RIGHT, padx=22, pady=16)
+
+        # 2. Spotify Pill Navigation Bar
+        nav_bar = tk.Frame(self.window, bg=COLOR_CANVAS, height=44)
+        nav_bar.pack(fill=tk.X, padx=22, pady=(14, 6))
+
+        self.btn_tab_general = tk.Button(
+            nav_bar,
+            text="⚙️ General y Atajos",
             font=("Segoe UI", 9, "bold"),
-            fg="#FECA66",
-            bg="#202023",
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=16,
+            pady=6,
+            command=lambda: self._switch_tab("general"),
         )
-        subtitle_lbl.pack(side=tk.RIGHT, padx=20, pady=16)
+        self.btn_tab_general.pack(side=tk.LEFT, padx=(0, 8))
 
-        # 2. Bottom action buttons bar (Packed BEFORE notebook to guarantee zero overflow)
-        sep_bar = tk.Frame(self.window, bg="#3f3f46", height=1)
-        sep_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        self.btn_tab_vocab = tk.Button(
+            nav_bar,
+            text="📖 Vocabulario Personalizado",
+            font=("Segoe UI", 9, "bold"),
+            relief=tk.FLAT,
+            cursor="hand2",
+            padx=16,
+            pady=6,
+            command=lambda: self._switch_tab("vocab"),
+        )
+        self.btn_tab_vocab.pack(side=tk.LEFT)
 
-        btn_bar = tk.Frame(self.window, bg="#202023", height=62)
-        btn_bar.pack(fill=tk.X, side=tk.BOTTOM)
+        # 3. Bottom Dock Action Bar (Packed before notebook to guarantee zero overlap)
+        sep_bottom = tk.Frame(self.window, bg="#282828", height=1)
+        sep_bottom.pack(fill=tk.X, side=tk.BOTTOM)
+
+        dock = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
+        dock.pack(fill=tk.X, side=tk.BOTTOM)
 
         btn_open_json = tk.Button(
-            btn_bar,
+            dock,
             text="📄 Editar config.json",
-            font=("Segoe UI", 9),
-            bg="#2a2a2e",
-            fg="#a1a1aa",
-            activebackground="#3f3f46",
-            activeforeground="#FFFFFF",
+            font=("Segoe UI", 8),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_MUTED,
+            activebackground=COLOR_PANEL_HOVER,
+            activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
             padx=12,
-            pady=7,
+            pady=6,
             command=self._on_open_json,
         )
-        btn_open_json.pack(side=tk.LEFT, padx=18, pady=12)
+        btn_open_json.pack(side=tk.LEFT, padx=22, pady=14)
 
         btn_cancel = tk.Button(
-            btn_bar,
+            dock,
             text="Minimizar (Esc)",
             font=("Segoe UI", 9),
-            bg="#3f3f46",
-            fg="#FBFBFD",
-            activebackground="#52525b",
-            activeforeground="#FFFFFF",
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            activebackground=COLOR_PANEL_HOVER,
+            activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
             padx=14,
-            pady=7,
+            pady=6,
             command=self._on_cancel,
         )
-        btn_cancel.pack(side=tk.RIGHT, padx=(6, 18), pady=12)
+        btn_cancel.pack(side=tk.RIGHT, padx=(6, 22), pady=14)
 
         btn_save = tk.Button(
-            btn_bar,
+            dock,
             text="💾 Guardar y Aplicar",
             font=("Segoe UI", 9, "bold"),
-            bg="#3284C6",
-            fg="#FFFFFF",
-            activebackground="#2563eb",
-            activeforeground="#FFFFFF",
+            bg=COLOR_SPOTIFY,
+            fg="#000000",
+            activebackground=COLOR_SPOTIFY_HOVER,
+            activeforeground="#000000",
             relief=tk.FLAT,
             cursor="hand2",
             padx=18,
-            pady=7,
+            pady=6,
             command=self._on_save,
         )
-        btn_save.pack(side=tk.RIGHT, padx=6, pady=12)
+        btn_save.pack(side=tk.RIGHT, padx=6, pady=14)
 
-        # 3. Styling for ttk Notebook and Combobox
-        style = ttk.Style()
-        style.theme_use("default")
-        style.configure("TNotebook", background="#18181b", borderwidth=0)
-        style.configure(
-            "TNotebook.Tab",
-            background="#27272a",
-            foreground="#FBFBFD",
-            padding=[16, 8],
+        # 4. Inline Toast Banner (Spotify-style notification directly in the modal)
+        self.toast_banner = tk.Frame(self.window, bg=COLOR_SPOTIFY, height=36)
+        self.toast_lbl = tk.Label(
+            self.toast_banner,
+            text="✓ Cambios guardados con éxito en config.json",
             font=("Segoe UI", 9, "bold"),
-            borderwidth=0,
+            fg="#000000",
+            bg=COLOR_SPOTIFY,
         )
-        style.map(
-            "TNotebook.Tab",
-            background=[("selected", "#3284C6"), ("active", "#3f3f46")],
-            foreground=[("selected", "#FFFFFF"), ("active", "#FFFFFF")],
-        )
-        style.configure(
-            "TCombobox",
-            background="#27272a",
-            foreground="#FBFBFD",
-            fieldbackground="#27272a",
-            darkcolor="#3f3f46",
-            lightcolor="#3f3f46",
-            arrowcolor="#FBFBFD",
-            padding=[6, 4],
-        )
-        style.map(
-            "TCombobox",
-            fieldbackground=[("readonly", "#27272a")],
-            foreground=[("readonly", "#FBFBFD")],
-            selectbackground=[("readonly", "#3284C6")],
-            selectforeground=[("readonly", "#FFFFFF")],
-        )
+        self.toast_lbl.pack(pady=7)
 
-        # 4. Central Notebook area (fills all space between top banner and bottom bar)
-        notebook = ttk.Notebook(self.window)
-        notebook.pack(fill=tk.BOTH, expand=True, padx=16, pady=(10, 6))
+        # 5. Central Scrollable Content Area
+        content_container = tk.Frame(self.window, bg=COLOR_CANVAS)
+        content_container.pack(fill=tk.BOTH, expand=True, padx=22, pady=(0, 6))
 
-        tab_general = tk.Frame(notebook, bg="#18181b", padx=16, pady=12)
-        tab_vocab = tk.Frame(notebook, bg="#18181b", padx=16, pady=12)
+        # Tab General Frame
+        self.tab_general_frame = tk.Frame(content_container, bg=COLOR_CANVAS)
+        self._build_general_tab(self.tab_general_frame)
 
-        notebook.add(tab_general, text="⚙️ General y Modelos")
-        notebook.add(tab_vocab, text="📖 Vocabulario Personalizado")
+        # Tab Vocab Frame
+        self.tab_vocab_frame = tk.Frame(content_container, bg=COLOR_CANVAS)
+        self._build_vocab_tab(self.tab_vocab_frame)
 
-        self._build_general_tab(tab_general)
-        self._build_vocab_tab(tab_vocab)
+        self._switch_tab("general")
+
+    def _switch_tab(self, tab_name: str) -> None:
+        """Switch between General and Vocabulary tabs with Spotify-style pill styling."""
+        self.active_tab = tab_name
+        if tab_name == "general":
+            self.tab_vocab_frame.pack_forget()
+            self.tab_general_frame.pack(fill=tk.BOTH, expand=True)
+
+            self.btn_tab_general.configure(
+                bg=COLOR_SPOTIFY,
+                fg="#000000",
+                activebackground=COLOR_SPOTIFY_HOVER,
+                activeforeground="#000000",
+            )
+            self.btn_tab_vocab.configure(
+                bg=COLOR_PANEL,
+                fg=COLOR_TEXT_MUTED,
+                activebackground=COLOR_PANEL_HOVER,
+                activeforeground=COLOR_TEXT_WHITE,
+            )
+        else:
+            self.tab_general_frame.pack_forget()
+            self.tab_vocab_frame.pack(fill=tk.BOTH, expand=True)
+
+            self.btn_tab_general.configure(
+                bg=COLOR_PANEL,
+                fg=COLOR_TEXT_MUTED,
+                activebackground=COLOR_PANEL_HOVER,
+                activeforeground=COLOR_TEXT_WHITE,
+            )
+            self.btn_tab_vocab.configure(
+                bg=COLOR_SPOTIFY,
+                fg="#000000",
+                activebackground=COLOR_SPOTIFY_HOVER,
+                activeforeground="#000000",
+            )
 
     def _build_general_tab(self, parent: tk.Frame) -> None:
-        """Build general settings tab content."""
-        # --- Section 1: Atajos de Teclado ---
-        self._create_section_label(parent, "ATAJOS DE TECLADO (CORE SHORTCUTS)")
+        """Build general settings with card-based Spotify aesthetics."""
+        # Canvas + Scrollbar for vertical flexibility
+        canvas = tk.Canvas(parent, bg=COLOR_CANVAS, highlightthickness=0)
+        scrollbar = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
+        scrollable_frame = tk.Frame(canvas, bg=COLOR_CANVAS)
 
-        self.var_dictation = tk.StringVar(value=self.current_config.hotkey_dictation)
-        self.var_rewrite = tk.StringVar(value=self.current_config.hotkey_rewrite)
-        self.var_settings = tk.StringVar(value=self.current_config.hotkey_settings or "ctrl+alt+s")
-        self.var_diagnostics = tk.StringVar(value=self.current_config.hotkey_diagnostics)
+        scrollable_frame.bind(
+            "<Configure>",
+            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        )
+        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
+        canvas.configure(yscrollcommand=scrollbar.set)
 
+        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # Mouse wheel support
+        def _on_mousewheel(event):
+            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        canvas.bind_all("<MouseWheel>", _on_mousewheel)
+
+        # === CARD 1: ATAJOS DE TECLADO (CORE ONLY: STRICTLY 2 KEYS) ===
+        card_shortcuts = self._create_card(scrollable_frame, "⌨️ Atajos de Teclado", "Solo 2 atajos oficiales: hablar y corregir selección.")
         self._create_entry_row(
-            parent,
+            card_shortcuts,
             label="Dictado Inteligente:",
             var=self.var_dictation,
-            help_text="Atajo global para hablar (default: win+space)",
+            help_text="Habla y transcribe texto en cualquier ventana activa (default: win+space)",
         )
         self._create_entry_row(
-            parent,
+            card_shortcuts,
             label="Reescritura Contextual:",
             var=self.var_rewrite,
-            help_text="Atajo para pulir selección activa (default: ctrl+shift+space)",
-        )
-        self._create_entry_row(
-            parent,
-            label="Abrir Configuración:",
-            var=self.var_settings,
-            help_text="Vía de teclado a esta ventana si el icono falla (default: ctrl+alt+s)",
-        )
-        self._create_entry_row(
-            parent,
-            label="Diagnóstico (Logs):",
-            var=self.var_diagnostics,
-            help_text="Abre morocovoice.log en Notepad (default: ctrl+shift+d)",
+            help_text="Pule y mejora la selección de texto con IA (default: ctrl+shift+space)",
         )
 
-        # --- Section 2: Motor y Modelos ---
-        self._create_section_label(parent, "MOTOR Y MODELOS DE INFERENCIA")
-
-        self.var_engine = tk.StringVar(value=self.current_config.engine.value)
-        self.var_groq_api_key = tk.StringVar(
-            value=self.current_config.groq_api_key or os.getenv("GROQ_API_KEY", "")
-        )
-        self.var_stt_language = tk.StringVar(
-            value=getattr(self.current_config, "stt_language", "es")
-        )
-        self.var_stt_model = tk.StringVar(value=self.current_config.groq_stt_model)
-        self.var_llm_model = tk.StringVar(value=self.current_config.groq_llm_model)
-
-        # Engine selector row
-        engine_row = tk.Frame(parent, bg="#18181b")
-        engine_row.pack(fill=tk.X, pady=3)
-        tk.Label(
-            engine_row,
-            text="Motor de Audio:",
-            font=("Segoe UI", 9, "bold"),
-            fg="#FBFBFD",
-            bg="#18181b",
-            width=20,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        engine_menu = ttk.Combobox(
-            engine_row,
-            textvariable=self.var_engine,
+        # === CARD 2: MOTOR Y MODELOS DE INFERENCIA ===
+        card_engine = self._create_card(scrollable_frame, "🧠 Motor y Modelos de Inferencia", "Configura la transcripción por voz y el modelo LLM.")
+        
+        # Engine Combobox
+        self._create_combobox_row(
+            card_engine,
+            label="Motor de Audio:",
+            var=self.var_engine,
             values=["CLOUD", "LOCAL"],
-            state="readonly",
-            width=28,
+            help_text="CLOUD (Groq Whisper ultra-rápido) o LOCAL (offline por CPU)",
         )
-        engine_menu.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        # Language selector row
-        lang_row = tk.Frame(parent, bg="#18181b")
-        lang_row.pack(fill=tk.X, pady=3)
-        tk.Label(
-            lang_row,
-            text="Idioma STT:",
-            font=("Segoe UI", 9),
-            fg="#FBFBFD",
-            bg="#18181b",
-            width=20,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        lang_menu = ttk.Combobox(
-            lang_row,
-            textvariable=self.var_stt_language,
+        # STT Language Combobox
+        self._create_combobox_row(
+            card_engine,
+            label="Idioma STT:",
+            var=self.var_stt_language,
             values=["es", "en"],
-            state="readonly",
-            width=28,
+            help_text="Idioma base para reconocimiento de voz (es = Español, en = English)",
         )
-        lang_menu.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
+        # Groq API Key
         self._create_masked_entry_row(
-            parent,
+            card_engine,
             label="Groq API Key:",
             var=self.var_groq_api_key,
-            help_text="Clave de API enmascarada (almacenada segura en .env)",
+            help_text="Clave de API enmascarada (guardada de forma segura en .env)",
         )
 
-        # 1-Click direct browser helper
-        groq_link_row = tk.Frame(parent, bg="#18181b")
-        groq_link_row.pack(fill=tk.X, pady=(2, 4))
-        tk.Label(groq_link_row, text="", bg="#18181b", width=20).pack(side=tk.LEFT)
+        # 1-Click Key helper link
+        groq_link_row = tk.Frame(card_engine, bg=COLOR_PANEL)
+        groq_link_row.pack(fill=tk.X, pady=(2, 6))
+        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=22).pack(side=tk.LEFT)
         btn_get_key = tk.Button(
             groq_link_row,
             text="🔑 Obtener clave gratuita en console.groq.com (1 clic)",
             font=("Segoe UI", 8, "underline"),
-            fg="#3284C6",
-            bg="#18181b",
-            activeforeground="#FECA66",
-            activebackground="#18181b",
+            fg=COLOR_SPOTIFY,
+            bg=COLOR_PANEL,
+            activeforeground=COLOR_SPOTIFY_HOVER,
+            activebackground=COLOR_PANEL,
             relief=tk.FLAT,
             cursor="hand2",
             command=lambda: webbrowser.open("https://console.groq.com/keys"),
         )
         btn_get_key.pack(side=tk.LEFT)
 
+        # STT Model
         self._create_entry_row(
-            parent,
+            card_engine,
             label="Modelo STT Groq:",
             var=self.var_stt_model,
-            help_text="whisper-large-v3-turbo o whisper-large-v3",
+            help_text="whisper-large-v3 o whisper-large-v3-turbo",
         )
+        # LLM Model
         self._create_entry_row(
-            parent,
+            card_engine,
             label="Modelo LLM Groq:",
             var=self.var_llm_model,
             help_text="qwen/qwen3.8-27b (Recomendado) o openai/gpt-oss-120b",
         )
 
-        # --- Section 3: Comportamiento ---
-        self._create_section_label(parent, "COMPORTAMIENTO Y PARÁMETROS")
-
-        self.var_max_sec = tk.IntVar(value=self.current_config.max_recording_seconds)
-        self.var_delay_ms = tk.IntVar(value=self.current_config.clipboard_restore_delay_ms)
-
+        # === CARD 3: COMPORTAMIENTO Y PARÁMETROS ===
+        card_behavior = self._create_card(scrollable_frame, "⚡ Comportamiento y Portapapeles", "Parámetros de corte de audio y retardo de pegado.")
         self._create_entry_row(
-            parent,
+            card_behavior,
             label="Máx. Grabación (seg):",
             var=self.var_max_sec,
-            help_text="Límite de corte automático (default: 60)",
+            help_text="Límite máximo por dictado antes de corte automático (default: 60)",
         )
         self._create_entry_row(
-            parent,
-            label="Restaurar Clipboard (ms):",
+            card_behavior,
+            label="Retardo Pegado (ms):",
             var=self.var_delay_ms,
-            help_text="Retardo seguro post-pegado (default: 80)",
+            help_text="Retardo post-inyección para estabilidad de portapapeles (default: 80)",
         )
 
     def _build_vocab_tab(self, parent: tk.Frame) -> None:
-        """Build custom vocabulary management tab content."""
-        self._create_section_label(parent, "DICCIONARIO DE PALABRAS Y JERGA TÉCNICA")
-
-        desc_lbl = tk.Label(
+        """Build custom vocabulary management with Spotify card aesthetics."""
+        card_vocab = self._create_card(
             parent,
-            text=(
-                "Ingresa hasta 30 palabras técnicas, nombres propios o siglas (un término por línea).\n"
-                "Whisper y el corrector determinista de MorocoVoice priorizarán estos términos para\n"
-                "evitar errores fonéticos (ejemplo: 'GitHub' en lugar de 'GITCOP')."
-            ),
-            font=("Segoe UI", 8),
-            fg="#a1a1aa",
-            bg="#18181b",
-            justify=tk.LEFT,
-            anchor="w",
+            "📖 Diccionario de Jerga Técnica y Términos Propios",
+            "Hasta 30 palabras o siglas clave (un término por línea) para guiar la fonética de Whisper.",
         )
-        desc_lbl.pack(fill=tk.X, pady=(0, 6))
 
-        # Counter and restore bar
-        counter_bar = tk.Frame(parent, bg="#18181b")
-        counter_bar.pack(fill=tk.X, pady=(0, 4))
+        counter_bar = tk.Frame(card_vocab, bg=COLOR_PANEL)
+        counter_bar.pack(fill=tk.X, pady=(0, 8))
 
         self.vocab_counter_lbl = tk.Label(
             counter_bar,
             text="0 / 30 términos",
             font=("Segoe UI", 9, "bold"),
-            fg="#10b981",
-            bg="#18181b",
+            fg=COLOR_SPOTIFY,
+            bg=COLOR_PANEL,
         )
         self.vocab_counter_lbl.pack(side=tk.LEFT)
 
-        btn_restore_vocab = tk.Button(
+        btn_restore = tk.Button(
             counter_bar,
             text="↩ Restaurar recomendados",
             font=("Segoe UI", 8),
-            fg="#FECA66",
-            bg="#27272a",
-            activeforeground="#FFFFFF",
-            activebackground="#3f3f46",
+            fg=COLOR_GOLD,
+            bg=COLOR_INPUT_BG,
+            activeforeground=COLOR_TEXT_WHITE,
+            activebackground=COLOR_PANEL_HOVER,
             relief=tk.FLAT,
-            padx=8,
-            pady=2,
+            padx=10,
+            pady=3,
             cursor="hand2",
             command=self._restore_recommended_vocabulary,
         )
-        btn_restore_vocab.pack(side=tk.RIGHT)
+        btn_restore.pack(side=tk.RIGHT)
 
-        # Text editor container with scrollbar
-        text_container = tk.Frame(parent, bg="#27272a", highlightthickness=1, highlightbackground="#3f3f46")
+        # Text editor container
+        text_container = tk.Frame(card_vocab, bg=COLOR_INPUT_BG, highlightthickness=1, highlightbackground=COLOR_INPUT_BORDER)
         text_container.pack(fill=tk.BOTH, expand=True, pady=4)
 
         scrollbar = tk.Scrollbar(text_container)
@@ -499,20 +569,212 @@ class SettingsModal:
         self.vocab_text = tk.Text(
             text_container,
             font=("Consolas", 10),
-            bg="#1e1e24",
-            fg="#FBFBFD",
-            insertbackground="#FBFBFD",
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            insertbackground=COLOR_SPOTIFY,
             relief=tk.FLAT,
-            padx=8,
-            pady=8,
+            padx=10,
+            pady=10,
             yscrollcommand=scrollbar.set,
         )
         self.vocab_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.config(command=self.vocab_text.yview)
 
-        # Load existing vocabulary terms
         self._load_current_vocabulary_into_ui()
         self.vocab_text.bind("<KeyRelease>", lambda e: self._update_vocab_counter())
+
+    def _create_card(self, parent: tk.Frame, title: str, subtitle: str = "") -> tk.Frame:
+        """Create a rounded Spotify-style card with header."""
+        outer = tk.Frame(
+            parent,
+            bg=COLOR_PANEL,
+            padx=18,
+            pady=16,
+            highlightthickness=1,
+            highlightbackground="#242424",
+        )
+        outer.pack(fill=tk.X, pady=(0, 14))
+
+        tk.Label(
+            outer,
+            text=title,
+            font=("Segoe UI", 10, "bold"),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            anchor="w",
+        ).pack(fill=tk.X)
+
+        if subtitle:
+            tk.Label(
+                outer,
+                text=subtitle,
+                font=("Segoe UI", 8),
+                fg=COLOR_TEXT_MUTED,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(1, 10))
+        else:
+            tk.Frame(outer, height=6, bg=COLOR_PANEL).pack()
+
+        return outer
+
+    def _create_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
+    ) -> None:
+        """Create an entry row with Spotify dark styling."""
+        row = tk.Frame(parent, bg=COLOR_PANEL)
+        row.pack(fill=tk.X, pady=4)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            width=22,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        outer_container = tk.Frame(row, bg=COLOR_PANEL)
+        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        entry = tk.Entry(
+            outer_container,
+            textvariable=var,
+            font=("Segoe UI", 9),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            insertbackground=COLOR_SPOTIFY,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=COLOR_INPUT_BORDER,
+            highlightcolor=COLOR_INPUT_FOCUS,
+        )
+        entry.pack(fill=tk.X, expand=True, ipady=3)
+
+        if help_text:
+            tk.Label(
+                outer_container,
+                text=help_text,
+                font=("Segoe UI", 7),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
+
+    def _create_masked_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
+    ) -> None:
+        """Create a masked password/API-key entry with toggle eye button."""
+        row = tk.Frame(parent, bg=COLOR_PANEL)
+        row.pack(fill=tk.X, pady=4)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            width=22,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        outer_container = tk.Frame(row, bg=COLOR_PANEL)
+        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        entry_container = tk.Frame(outer_container, bg=COLOR_PANEL)
+        entry_container.pack(fill=tk.X, expand=True)
+
+        entry = tk.Entry(
+            entry_container,
+            textvariable=var,
+            font=("Segoe UI", 9),
+            bg=COLOR_INPUT_BG,
+            fg=COLOR_TEXT_WHITE,
+            insertbackground=COLOR_SPOTIFY,
+            relief=tk.FLAT,
+            highlightthickness=1,
+            highlightbackground=COLOR_INPUT_BORDER,
+            highlightcolor=COLOR_INPUT_FOCUS,
+            show="*",
+        )
+        entry.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=3)
+
+        is_visible = [False]
+
+        def toggle_mask():
+            if is_visible[0]:
+                entry.configure(show="*")
+                eye_btn.configure(text="👁️")
+                is_visible[0] = False
+            else:
+                entry.configure(show="")
+                eye_btn.configure(text="🔒")
+                is_visible[0] = True
+
+        eye_btn = tk.Button(
+            entry_container,
+            text="👁️",
+            font=("Segoe UI", 8),
+            bg=COLOR_PANEL_HOVER,
+            fg=COLOR_TEXT_WHITE,
+            activebackground="#333333",
+            activeforeground=COLOR_TEXT_WHITE,
+            relief=tk.FLAT,
+            padx=6,
+            pady=2,
+            cursor="hand2",
+            command=toggle_mask,
+        )
+        eye_btn.pack(side=tk.LEFT, padx=(6, 0))
+
+        if help_text:
+            tk.Label(
+                outer_container,
+                text=help_text,
+                font=("Segoe UI", 7),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
+
+    def _create_combobox_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, values: list[str], help_text: str = ""
+    ) -> None:
+        """Create a Combobox row with dark styling."""
+        row = tk.Frame(parent, bg=COLOR_PANEL)
+        row.pack(fill=tk.X, pady=4)
+
+        tk.Label(
+            row,
+            text=label,
+            font=("Segoe UI", 9),
+            fg=COLOR_TEXT_WHITE,
+            bg=COLOR_PANEL,
+            width=22,
+            anchor="w",
+        ).pack(side=tk.LEFT)
+
+        outer_container = tk.Frame(row, bg=COLOR_PANEL)
+        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        combo = ttk.Combobox(
+            outer_container,
+            textvariable=var,
+            values=values,
+            state="readonly",
+        )
+        combo.pack(fill=tk.X, expand=True)
+
+        if help_text:
+            tk.Label(
+                outer_container,
+                text=help_text,
+                font=("Segoe UI", 7),
+                fg=COLOR_TEXT_HINT,
+                bg=COLOR_PANEL,
+                anchor="w",
+            ).pack(fill=tk.X, pady=(2, 0))
 
     def _load_current_vocabulary_into_ui(self) -> None:
         """Read custom_vocabulary.json and populate editor."""
@@ -536,7 +798,7 @@ class SettingsModal:
         self._update_vocab_counter()
 
     def _restore_recommended_vocabulary(self) -> None:
-        """Reset editor content to the canonical recommended terms."""
+        """Reset editor content to canonical recommended terms."""
         if not self.vocab_text:
             return
         self.vocab_text.delete("1.0", tk.END)
@@ -557,158 +819,37 @@ class SettingsModal:
         terms = self._get_current_terms_from_ui()
         count = len(terms)
         if count <= 25:
-            color = "#10b981"  # Emerald
+            color = COLOR_SPOTIFY
         elif count <= 30:
-            color = "#FECA66"  # Amber warning
+            color = COLOR_GOLD
         else:
-            color = "#ef4444"  # Red limit exceeded
+            color = COLOR_DANGER
 
         self.vocab_counter_lbl.configure(
             text=f"{count} / 30 términos",
             fg=color,
         )
 
-    def _create_section_label(self, parent: tk.Frame, title: str) -> None:
-        """Create a section header with accent line."""
-        sec_frame = tk.Frame(parent, bg="#18181b")
-        sec_frame.pack(fill=tk.X, pady=(14, 5))
+    def _show_toast(self, message: str, is_error: bool = False) -> None:
+        """Display an inline Spotify-style toast notification."""
+        if not self.toast_banner or not self.toast_lbl:
+            return
+        bg_col = COLOR_DANGER if is_error else COLOR_SPOTIFY
+        fg_col = "#FFFFFF" if is_error else "#000000"
+        self.toast_banner.configure(bg=bg_col)
+        self.toast_lbl.configure(text=message, bg=bg_col, fg=fg_col)
+        self.toast_banner.pack(fill=tk.X, side=tk.BOTTOM, before=self.window.winfo_children()[-2])
+        self.window.after(3500, self._hide_toast)
 
-        tk.Label(
-            sec_frame,
-            text=title,
-            font=("Segoe UI", 8, "bold"),
-            fg="#3284C6",
-            bg="#18181b",
-        ).pack(side=tk.LEFT)
-
-        sep = tk.Frame(sec_frame, bg="#3f3f46", height=1)
-        sep.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(8, 0), pady=4)
-
-    def _create_entry_row(
-        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
-    ) -> None:
-        """Create a label + entry row with rendered inline help text."""
-        row = tk.Frame(parent, bg="#18181b")
-        row.pack(fill=tk.X, pady=3)
-
-        tk.Label(
-            row,
-            text=label,
-            font=("Segoe UI", 9),
-            fg="#FBFBFD",
-            bg="#18181b",
-            width=20,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        entry_container = tk.Frame(row, bg="#18181b")
-        entry_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        entry = tk.Entry(
-            entry_container,
-            textvariable=var,
-            font=("Segoe UI", 9),
-            bg="#27272a",
-            fg="#FBFBFD",
-            insertbackground="#FBFBFD",
-            relief=tk.FLAT,
-            highlightthickness=1,
-            highlightbackground="#3f3f46",
-            highlightcolor="#3284C6",
-        )
-        entry.pack(fill=tk.X, expand=True)
-
-        if help_text:
-            help_lbl = tk.Label(
-                entry_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg="#71717a",
-                bg="#18181b",
-                anchor="w",
-            )
-            help_lbl.pack(fill=tk.X, pady=(2, 0))
-
-    def _create_masked_entry_row(
-        self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
-    ) -> None:
-        """Create a masked entry row with asterisks, eye toggle button and help text."""
-        row = tk.Frame(parent, bg="#18181b")
-        row.pack(fill=tk.X, pady=3)
-
-        tk.Label(
-            row,
-            text=label,
-            font=("Segoe UI", 9),
-            fg="#FBFBFD",
-            bg="#18181b",
-            width=20,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        outer_container = tk.Frame(row, bg="#18181b")
-        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        entry_container = tk.Frame(outer_container, bg="#18181b")
-        entry_container.pack(fill=tk.X, expand=True)
-
-        entry = tk.Entry(
-            entry_container,
-            textvariable=var,
-            font=("Segoe UI", 9),
-            bg="#27272a",
-            fg="#FBFBFD",
-            insertbackground="#FBFBFD",
-            relief=tk.FLAT,
-            highlightthickness=1,
-            highlightbackground="#3f3f46",
-            highlightcolor="#3284C6",
-            show="*",
-        )
-        entry.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        is_visible = [False]
-
-        def toggle_mask() -> None:
-            if is_visible[0]:
-                entry.configure(show="*")
-                eye_btn.configure(text="👁️")
-                is_visible[0] = False
-            else:
-                entry.configure(show="")
-                eye_btn.configure(text="🔒")
-                is_visible[0] = True
-
-        eye_btn = tk.Button(
-            entry_container,
-            text="👁️",
-            font=("Segoe UI", 8),
-            bg="#3f3f46",
-            fg="#FBFBFD",
-            activebackground="#52525b",
-            activeforeground="#FFFFFF",
-            relief=tk.FLAT,
-            padx=4,
-            pady=0,
-            command=toggle_mask,
-        )
-        eye_btn.pack(side=tk.LEFT, padx=(4, 0))
-
-        if help_text:
-            help_lbl = tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg="#71717a",
-                bg="#18181b",
-                anchor="w",
-            )
-            help_lbl.pack(fill=tk.X, pady=(1, 0))
+    def _hide_toast(self) -> None:
+        """Dismiss inline toast."""
+        if self.toast_banner and self.toast_banner.winfo_ismapped():
+            self.toast_banner.pack_forget()
 
     def _on_open_json(self) -> None:
-        """Open config.json directly in Notepad for raw editing."""
+        """Open config.json directly in Notepad for raw inspection."""
         if not self.config_path.exists():
-            messagebox.showwarning("Archivo no encontrado", f"No se encontró {self.config_path}")
+            self._show_toast("No se encontró el archivo config.json", is_error=True)
             return
         try:
             subprocess.Popen(["notepad.exe", str(self.config_path)], close_fds=True)
@@ -716,18 +857,16 @@ class SettingsModal:
             logger.error("Failed to open config.json in notepad: %s", e)
 
     def _on_cancel(self) -> None:
-        """Close modal without saving."""
+        """Close modal cleanly."""
         if self.window:
             self.window.destroy()
             self.window = None
 
     def _on_save(self) -> None:
-        """Validate, persist to config.json and custom_vocabulary.json, and apply updates."""
+        """Validate, persist to config.json, update current_config, and apply live hot reload."""
         try:
             dictation_val = self.var_dictation.get().strip()
             rewrite_val = self.var_rewrite.get().strip()
-            settings_val = self.var_settings.get().strip()
-            diagnostics_val = self.var_diagnostics.get().strip()
             engine_str = self.var_engine.get().strip().upper()
             stt_lang = self.var_stt_language.get().strip() or "es"
             stt_model = self.var_stt_model.get().strip()
@@ -736,23 +875,16 @@ class SettingsModal:
             delay_ms = int(self.var_delay_ms.get())
 
             if not dictation_val:
-                messagebox.showerror("Error de validación", "El atajo de dictado no puede estar vacío.", parent=self.window)
+                self._show_toast("El atajo de dictado no puede estar vacío.", is_error=True)
                 return
 
-            if not settings_val:
-                messagebox.showerror(
-                    "Error de validación",
-                    "El atajo para abrir Configuración no puede estar vacío.\n\n"
-                    "Es la única vía de teclado a esta ventana cuando el icono de la "
-                    "bandeja del sistema no está disponible (por ejemplo, si Windows "
-                    "rechaza el icono o lo esconde en el cajón de desbordamiento).",
-                    parent=self.window,
-                )
+            if not rewrite_val:
+                self._show_toast("El atajo de reescritura no puede estar vacío.", is_error=True)
                 return
 
             engine_type = AudioEngineType.CLOUD if engine_str == "CLOUD" else AudioEngineType.LOCAL
 
-            # Detect placeholder or empty key for CLOUD engine
+            # Groq API Key validation for CLOUD mode
             groq_key_val = self.var_groq_api_key.get().strip()
             is_placeholder = (
                 not groq_key_val
@@ -781,7 +913,7 @@ class SettingsModal:
                         f"{auth_msg}\n\n"
                         "¿Deseas guardarla de todas formas (por ejemplo si estás sin conexión)?"
                     )
-                    if not messagebox.askyesno("Verificación de Groq Fallida", warn_msg, parent=self.window):
+                    if not messagebox.askyesno("Verificación de Groq", warn_msg, parent=self.window):
                         return
 
             # Validate vocabulary terms
@@ -805,7 +937,7 @@ class SettingsModal:
             except Exception as e:
                 logger.error("Failed to save vocabulary: %s", e)
 
-            # Load existing config dict or start fresh
+            # Load existing config dictionary
             cfg_dict = {}
             if self.config_path.exists():
                 try:
@@ -814,11 +946,12 @@ class SettingsModal:
                 except Exception:
                     pass
 
+            # Update ONLY user settings, keeping extra hotkeys empty/clean
             cfg_dict.update({
                 "hotkey_dictation": dictation_val,
                 "hotkey_rewrite": rewrite_val,
-                "hotkey_settings": settings_val,
-                "hotkey_diagnostics": diagnostics_val,
+                "hotkey_settings": "",
+                "hotkey_diagnostics": "",
                 "engine": engine_type.value,
                 "stt_language": stt_lang,
                 "groq_stt_model": stt_model,
@@ -826,11 +959,8 @@ class SettingsModal:
                 "max_recording_seconds": max_sec,
                 "clipboard_restore_delay_ms": delay_ms,
             })
-            # NOTE: hotkey_shutdown and hotkey_diagnostics used to be *deleted* here,
-            # which silently disabled them on every save. They are now written back
-            # (and exposed in the UI) instead of being dropped.
 
-            # Save to config.json atomically
+            # Save config.json
             with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(cfg_dict, f, indent=2, ensure_ascii=False)
 
@@ -842,27 +972,18 @@ class SettingsModal:
                 _persist_groq_api_key_to_env(env_path, groq_key_val)
                 os.environ["GROQ_API_KEY"] = groq_key_val
 
-            # Construct new AppConfig
+            # CRITICAL: Construct new AppConfig and update modal internal state immediately!
             from app.config import load_config
             new_config = load_config(self.config_path)
+            self.current_config = new_config
 
-            # Trigger live hot reload
+            # Trigger live hot reload on running orchestrator
             self.on_saved(new_config)
 
-            key_status = "Almacenada de forma segura." if not is_placeholder else "No configurada (usando LOCAL)."
-            messagebox.showinfo(
-                "MorocoVoice - Configuración Actualizada",
-                f"Cambios guardados con éxito.\n\n"
-                f"• Atajo de dictado: {dictation_val}\n"
-                f"• Abrir Configuración: {settings_val}\n"
-                f"• Motor activo: {engine_type.value}\n"
-                f"• Idioma STT: {stt_lang}\n"
-                f"• Vocabulario activo: {len(terms)} términos\n"
-                f"• Groq API Key: {key_status}",
-                parent=self.window,
-            )
-            self._on_cancel()
+            # Spotify-style non-intrusive feedback
+            self._show_toast(f"✓ Guardado: Dictado ({dictation_val}) | Reescritura ({rewrite_val})")
+            self.window.after(1400, self._on_cancel)
 
         except Exception as e:
             logger.error("Failed to save settings: %s", e)
-            messagebox.showerror("Error", f"No se pudo guardar la configuración: {e}", parent=self.window)
+            self._show_toast(f"Error al guardar: {e}", is_error=True)

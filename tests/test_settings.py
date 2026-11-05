@@ -77,3 +77,41 @@ def test_verify_groq_api_key_online_mocked():
         assert valid is False
         assert "401" in msg or "inválida" in msg
 
+
+def test_settings_modal_reloads_fresh_config(tmp_path):
+    """Ensure SettingsModal always syncs from disk and never displays stale cached hotkeys."""
+    import json
+    import tkinter as tk
+    from app.contracts import AppConfig
+    from app.ui.settings_window import SettingsModal
+
+    cfg_file = tmp_path / "config.json"
+    cfg_file.write_text(
+        json.dumps({"hotkey_dictation": "ctrl+shift+h", "hotkey_rewrite": "ctrl+shift+space"}),
+        encoding="utf-8",
+    )
+
+    root = tk.Tk()
+    root.withdraw()
+    try:
+        initial_cfg = AppConfig(hotkey_dictation="ctrl+s")
+        saved_calls = []
+
+        modal = SettingsModal(
+            parent=root,
+            current_config=initial_cfg,
+            config_file_path=cfg_file,
+            on_saved=lambda c: saved_calls.append(c),
+        )
+
+        # Before show: initial config had ctrl+s
+        assert modal.current_config.hotkey_dictation == "ctrl+s"
+
+        # Simulate show() logic: must refresh from disk
+        modal.show()
+        assert modal.current_config.hotkey_dictation == "ctrl+shift+h"
+        assert modal.var_dictation.get() == "ctrl+shift+h"
+
+        modal._on_cancel()
+    finally:
+        root.destroy()
