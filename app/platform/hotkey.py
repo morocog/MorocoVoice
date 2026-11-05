@@ -32,6 +32,15 @@ KEY_ALIASES: dict[str, str] = {
     "del": "delete",
 }
 
+VK_SPECIAL_MAP: dict[int, str] = {
+    8: "backspace",
+    9: "tab",
+    13: "enter",
+    27: "esc",
+    32: "space",
+    46: "delete",
+}
+
 
 def extract_key_name(key: keyboard.Key | keyboard.KeyCode) -> str:
     """Extract canonical lowercase string representation of a key.
@@ -44,11 +53,15 @@ def extract_key_name(key: keyboard.Key | keyboard.KeyCode) -> str:
     if isinstance(key, keyboard.KeyCode):
         if key.char:
             c = key.char
+            if c == " ":
+                return "space"
             # On Windows, Ctrl+A .. Ctrl+Z produce ASCII control codes 1..26 (\x01 - \x1a)
             if 1 <= ord(c) <= 26:
                 return chr(ord(c) + 96).lower()
             return c.lower()
         if key.vk:
+            if key.vk in VK_SPECIAL_MAP:
+                return VK_SPECIAL_MAP[key.vk]
             # 65-90: A-Z
             if 65 <= key.vk <= 90:
                 return chr(key.vk).lower()

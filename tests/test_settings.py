@@ -145,37 +145,61 @@ def test_render_keycap_chips_generates_chips():
 
 def test_tray_menu_has_settings_as_default_item():
     """Verify the tray icon designates Settings as default=True for double-click activation."""
-    import tkinter as tk
+    from unittest.mock import MagicMock
     from app.ui.tray import SystemTrayManager
 
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        mgr = SystemTrayManager(
-            root=root,
-            on_shutdown=lambda: None,
-            on_open_settings=lambda: None,
-        )
-        # Verify default constructor has empty hotkey_settings (clean governance)
-        assert mgr.hotkey_settings == ""
+    mock_root = MagicMock()
+    mgr = SystemTrayManager(
+        root=mock_root,
+        on_shutdown=lambda: None,
+        on_open_settings=lambda: None,
+    )
+    # Verify default constructor has empty hotkey_settings (clean governance)
+    assert mgr.hotkey_settings == ""
 
-        # Trigger tray menu construction without background thread
-        from app.ui.tray import create_tray_icon_image
-        import pystray
-        from app import __version__
+    # Trigger tray menu construction without background thread
+    from app.ui.tray import create_tray_icon_image
+    import pystray
+    from app import __version__
 
-        menu = pystray.Menu(
-            pystray.MenuItem(f"MorocoVoice v{__version__}", None, enabled=False),
-            pystray.MenuItem(mgr._get_engine_label, None, enabled=False),
-            pystray.MenuItem(mgr._get_vad_label, None, enabled=False),
-            pystray.Menu.SEPARATOR,
-            pystray.MenuItem("⚙️ Configuración...", mgr._on_settings_clicked, default=True),
-            pystray.MenuItem("Abrir Logs", mgr._on_open_logs),
-            pystray.MenuItem("Salir", mgr._on_exit_clicked),
-        )
-        default_items = [item for item in menu.items if getattr(item, "default", False)]
-        assert len(default_items) == 1
-        assert "Configuración" in default_items[0].text
-    finally:
-        root.destroy()
+    menu = pystray.Menu(
+        pystray.MenuItem(f"MorocoVoice v{__version__}", None, enabled=False),
+        pystray.MenuItem(mgr._get_engine_label, None, enabled=False),
+        pystray.MenuItem(mgr._get_vad_label, None, enabled=False),
+        pystray.Menu.SEPARATOR,
+        pystray.MenuItem("⚙️ Configuración...", mgr._on_settings_clicked, default=True),
+        pystray.MenuItem("Abrir Logs", mgr._on_open_logs),
+        pystray.MenuItem("Salir", mgr._on_exit_clicked),
+    )
+    default_items = [item for item in menu.items if getattr(item, "default", False)]
+    assert len(default_items) == 1
+    assert "Configuración" in default_items[0].text
+
+
+def test_instrument_pystray_patches_icon_on_notify():
+    """Verify that _instrument_pystray patches Icon._on_notify to handle double-click."""
+    from unittest.mock import MagicMock
+    import pystray._win32 as pystray_win32_icon
+    from app.ui.tray import _instrument_pystray
+
+    _instrument_pystray()
+    assert hasattr(pystray_win32_icon.Icon, "_on_notify")
+    assert pystray_win32_icon.Icon._on_notify.__name__ == "_patched_on_notify"
+
+    # Verify that calling _patched_on_notify with WM_LBUTTONDBLCLK triggers self_icon()
+    mock_icon = MagicMock()
+    WM_LBUTTONDBLCLK = 0x0203
+    pystray_win32_icon.Icon._on_notify(mock_icon, 0, WM_LBUTTONDBLCLK)
+    mock_icon.assert_called_once()
+
+
+def test_apply_dark_title_bar_handles_null_safely():
+    """Verify _apply_dark_title_bar does not crash with mock or invalid window."""
+    from unittest.mock import MagicMock
+    from app.ui.settings_window import _apply_dark_title_bar
+
+    mock_win = MagicMock()
+    mock_win.winfo_id.return_value = 0
+    # Must execute safely without raising
+    _apply_dark_title_bar(mock_win)
 

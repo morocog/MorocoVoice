@@ -12,7 +12,7 @@ keywords = ["dictation", "speech-to-text", "whisper", "groq", "windows", "voice"
 
 [tool.ruff]
 line-length = 105
-target-version = "py311"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP"]

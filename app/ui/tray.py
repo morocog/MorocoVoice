@@ -8,6 +8,7 @@ from __future__ import annotations
 import atexit
 import ctypes
 import threading
+import time
 import tkinter as tk
 from collections.abc import Callable
 
@@ -112,22 +113,22 @@ def _instrument_pystray() -> None:
         logger.debug("Could not instrument Shell_NotifyIcon: %s", exc)
 
     try:
+        import pystray._win32 as pystray_win32_icon
+
         WM_LBUTTONUP = 0x0202
         WM_LBUTTONDBLCLK = 0x0203
 
-        orig_on_notify = getattr(pystray_win32.Icon, "_on_notify", None)
+        orig_on_notify = getattr(pystray_win32_icon.Icon, "_on_notify", None)
         if orig_on_notify:
             def _patched_on_notify(self_icon, wparam, lparam):
-                # Route both left double-click (WM_LBUTTONDBLCLK) and click (WM_LBUTTONUP) to default action
+                # Route both left double-click (WM_LBUTTONDBLCLK) and single click (WM_LBUTTONUP) to default action
                 if lparam in (WM_LBUTTONUP, WM_LBUTTONDBLCLK):
                     self_icon()
-                elif self_icon._menu_handle and lparam == pystray_win32.win32.WM_RBUTTONUP:
-                    orig_on_notify(self_icon, wparam, lparam)
                 else:
                     orig_on_notify(self_icon, wparam, lparam)
 
-            pystray_win32.Icon._on_notify = _patched_on_notify
-            logger.debug("pystray Win32 double-click and click handling instrumented.")
+            pystray_win32_icon.Icon._on_notify = _patched_on_notify
+            logger.debug("pystray Win32 double-click and click handling instrumented successfully.")
     except Exception as exc:  # pragma: no cover - defensive
         logger.debug("Could not patch pystray _on_notify: %s", exc)
 
@@ -155,6 +156,7 @@ class SystemTrayManager:
 
         self.icon: pystray.Icon | None = None
         self._thread: threading.Thread | None = None
+        self._last_settings_open_time = 0.0
 
     def start(self) -> None:
         """Launch the system tray icon loop inside a daemon thread."""
@@ -243,6 +245,10 @@ class SystemTrayManager:
             self.icon.update_menu()
 
     def _on_settings_clicked(self, icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        now = time.perf_counter()
+        if now - self._last_settings_open_time < 0.35:
+            return
+        self._last_settings_open_time = now
         if self.on_open_settings:
             self.root.after(0, self.on_open_settings)
 

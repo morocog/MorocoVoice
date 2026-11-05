@@ -11,41 +11,42 @@ echo   Suite de Dictado y Reescritura por Voz en Windows
 echo ======================================================
 echo.
 
-REM 1. Verificacion y Creacion Automatica del Entorno Virtual (Zero-Touch)
+REM 1. Verificación y Creación Automática del Entorno Virtual (Zero-Touch)
 if exist ".venv\Scripts\python.exe" goto :RUN_APP
 
 echo [*] Primer inicio detectado: Configurando entorno para MorocoVoice...
-echo [*] Verificando instalador de Python 3.11+ en el sistema...
+echo [*] Verificando instalador de Python 3.13 / 3.11+ en el sistema...
 
 set "PY_CMD="
-python --version >nul 2>&1
-if errorlevel 1 goto :CHECK_PY_LAUNCHER
-python -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
+REM Priorizar Python 3.13 como estándar canónico de la estación
+py -3.13 --version >nul 2>&1
 if not errorlevel 1 (
-    set "PY_CMD=python"
-    goto :CREATE_VENV
-)
-
-:CHECK_PY_LAUNCHER
-py -3.11 --version >nul 2>&1
-if not errorlevel 1 (
-    set "PY_CMD=py -3.11"
+    set "PY_CMD=py -3.13"
     goto :CREATE_VENV
 )
 
 py -3 --version >nul 2>&1
-if errorlevel 1 goto :NO_PY
-py -3 -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
 if not errorlevel 1 (
-    set "PY_CMD=py -3"
-    goto :CREATE_VENV
+    py -3 -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        set "PY_CMD=py -3"
+        goto :CREATE_VENV
+    )
 )
 
-:NO_PY
-echo [ERROR] No se detecto una instalacion valida de Python 3.11 o superior.
-echo MorocoVoice requiere Python 3.11+ con soporte StrEnum y tipado moderno.
-echo Por favor descarga e instala Python 3.11 o superior desde https://www.python.org/downloads/
-echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalacion.
+python --version >nul 2>&1
+if not errorlevel 1 (
+    python -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
+    if not errorlevel 1 (
+        set "PY_CMD=python"
+        goto :CREATE_VENV
+    )
+)
+
+echo [ERROR] No se detectó una instalación válida de Python 3.13 o 3.11+.
+echo MorocoVoice requiere Python con soporte moderno de tipado y subprocesos.
+echo Por favor descarga e instala Python 3.13 desde https://www.python.org/downloads/
+echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalación.
 echo.
 pause
 exit /b 1
@@ -59,12 +60,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [*] Instalando dependencias industriales (ONNX Runtime, Groq, CTranslate2)...
+echo [*] Instalando dependencias industriales (ONNX Runtime, Groq, Whisper, SoundDevice)...
 call .venv\Scripts\activate.bat
 python -m pip install --upgrade pip --quiet
 pip install -r requirements.txt
 if errorlevel 1 (
-    echo [ERROR] Ocurrio un fallo instalando requirements.txt.
+    echo [ERROR] Ocurrió un fallo instalando requirements.txt.
     pause
     exit /b 1
 )
@@ -72,7 +73,7 @@ if errorlevel 1 (
 if not exist ".env" (
     if exist ".env.example" (
         copy .env.example .env >nul
-        echo [*] Archivo de configuracion .env generado desde plantilla.
+        echo [*] Archivo de configuración .env generado desde plantilla.
     )
 )
 
@@ -83,7 +84,7 @@ if not exist "config.json" (
     )
 )
 
-echo [*] Entorno de MorocoVoice inicializado con exito!
+echo [*] Entorno de MorocoVoice inicializado con éxito!
 echo.
 
 :RUN_APP
@@ -91,50 +92,67 @@ REM 1.1 Asegurar acceso directo en el Escritorio con icono oficial si no existe
 if not exist "%USERPROFILE%\Desktop\Moroco Voice.lnk" (
     powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Moroco Voice.lnk')); $s.TargetPath = '%~dp0run.bat'; $s.WorkingDirectory = '%~dp0'; if (Test-Path '%~dp0morocovoice.ico') { $s.IconLocation = '%~dp0morocovoice.ico,0' }; $s.Description = 'MorocoVoice - Suite de Dictado y Reescritura por Voz'; $s.WindowStyle = 7; $s.Save()" >nul 2>&1
 )
-REM 2. Guardia de integridad: si el proceso corre en Low, Windows denegara el
-REM    icono de bandeja y el hook de teclado no vera ninguna tecla, asi que la
-REM    app parecera viva pero sin funcionar. Avisamos ANTES de arrancar.
-REM    (El nombre del nivel no se traduce: "Low Mandatory Level" es igual en
-REM    cualquier idioma de Windows, por eso se busca en ingles.)
+
+REM 1.2 Asegurar inicio automático con Windows en shell:startup
+set "STARTUP_FOLDER=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
+if not exist "%STARTUP_FOLDER%\Moroco Voice.lnk" (
+    powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine('%STARTUP_FOLDER%', 'Moroco Voice.lnk')); $s.TargetPath = '%~dp0run.bat'; $s.WorkingDirectory = '%~dp0'; if (Test-Path '%~dp0morocovoice.ico') { $s.IconLocation = '%~dp0morocovoice.ico,0' }; $s.Description = 'MorocoVoice - Suite de Dictado y Reescritura por Voz'; $s.WindowStyle = 7; $s.Save()" >nul 2>&1
+)
+
+REM 2. Guardia de integridad: si el proceso corre en Low, Windows denegará el
+REM    icono de bandeja y el hook de teclado no verá ninguna tecla.
 set "MV_INTEGRITY="
 for /f "delims=" %%i in ('whoami /groups ^| findstr /i "Mandatory Level"') do set "MV_INTEGRITY=%%i"
-REM    /c: es imprescindible: findstr trata las palabras separadas por espacio como
-REM    terminos alternativos (OR), asi que "Low Mandatory" coincidiria siempre.
 echo %MV_INTEGRITY% | findstr /i /c:"Low Mandatory" >nul
 if not errorlevel 1 (
   echo.
   echo ************************************************************
   echo  AVISO: ENTORNO RESTRINGIDO ^(integridad Low^)
   echo ************************************************************
-  echo  Esta carpeta tiene etiqueta de integridad Low, asi que la
-  echo  aplicacion se lanzara en Low y Windows le denegara el icono
-  echo  de bandeja ^(no aparecera junto al reloj^) y el hook de teclado
-  echo  ^(ningun atajo funcionara^), aunque parezca arrancar bien.
+  echo  Esta carpeta tiene etiqueta de integridad Low, así que Windows
+  echo  denegará el icono de bandeja y el hook de teclado.
   echo.
-  echo  Solucion: cierra esta ventana y ejecuta en CMD o PowerShell:
-  echo.
+  echo  Solución: ejecuta en PowerShell o CMD:
   echo    icacls "%~dp0." /setintegritylevel Medium /T /C
   echo.
-  echo  Despues vuelve a lanzar run.bat. Detalles en docs\TROUBLESHOOTING.md
+  echo  Detalles en docs\TROUBLESHOOTING.md
   echo ************************************************************
   echo.
   pause
 )
 
 REM 3. Limpieza de Procesos Previos para Evitar Conflictos de Mutex
-REM    IMPORTANTE: .venv\Scripts\pythonw.exe es solo un lanzador (redirector).
-REM    El interprete que realmente ejecuta la app vive en
-REM    ...\Programs\Python\Python311\pythonw.exe y NO contiene "MorocoVoice"
-REM    en su ruta, por lo que un filtro por ruta dejaba huerfanos vivos.
-REM    Se filtra por linea de comandos (app.main) para cerrar AMBOS.
-echo * Verificando y cerrando instancias previas de MorocoVoice...
+echo [*] Verificando y cerrando instancias previas de MorocoVoice...
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 600" >nul 2>&1
 
 REM 4. Arranque en Pantalla y Segundo Plano
-echo * Lanzando MorocoVoice...
-echo * Atajo de Dictado: Win + Space
-echo * Atajo de Reescritura: Ctrl + Shift + Space
-echo.
+echo [*] Lanzando MorocoVoice en segundo plano...
 
 start "" /d "%~dp0" "%~dp0.venv\Scripts\pythonw.exe" -m app.main
+
+REM 5. Verificación de Salud Post-Arranque (Evita Fallas Silenciosas)
+powershell -NoProfile -Command "Start-Sleep -Milliseconds 1500; $proc = Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' }; if ($proc) { exit 0 } else { exit 1 }" >nul 2>&1
+
+if errorlevel 1 (
+    echo.
+    echo ======================================================
+    echo  [ERROR] MorocoVoice no pudo iniciar o se cerró al arrancar.
+    echo ======================================================
+    echo Mostrando las últimas líneas de morocovoice.log:
+    echo.
+    if exist "morocovoice.log" (
+        powershell -NoProfile -Command "Get-Content morocovoice.log -Tail 15"
+    ) else (
+        echo [!] No se encontró morocovoice.log.
+    )
+    echo.
+    echo Presiona cualquier tecla para salir...
+    pause >nul
+    exit /b 1
+)
+
+echo [✓] MorocoVoice iniciado con éxito.
+echo [✓] Icono disponible en la bandeja del sistema (junto al reloj).
+echo [✓] Doble clic en el icono para abrir Configuración.
+powershell -NoProfile -Command "Start-Sleep -Milliseconds 1200" >nul 2>&1
 exit /b 0

@@ -104,6 +104,20 @@ def test_windows_ctrl_letter_control_characters():
     assert hk_s.matches({keyboard.Key.ctrl}, key_vk_only) is True
 
 
+def test_virtual_key_special_mappings():
+    """Verify VK codes for Space, Tab, Enter, Esc, Backspace, Delete map correctly."""
+    from app.platform.hotkey import extract_key_name
+
+    assert extract_key_name(keyboard.KeyCode.from_vk(32)) == "space"
+    assert extract_key_name(keyboard.KeyCode.from_vk(9)) == "tab"
+    assert extract_key_name(keyboard.KeyCode.from_vk(13)) == "enter"
+    assert extract_key_name(keyboard.KeyCode.from_vk(27)) == "esc"
+    assert extract_key_name(keyboard.KeyCode.from_vk(8)) == "backspace"
+    assert extract_key_name(keyboard.KeyCode.from_vk(46)) == "delete"
+    # Direct space character
+    assert extract_key_name(keyboard.KeyCode.from_char(" ")) == "space"
+
+
 def test_spanish_aliases_parsed():
     """Ensure Spanish aliases like 'espacio' parse to 'space'."""
     hk = parse_hotkey_string("win+espacio")

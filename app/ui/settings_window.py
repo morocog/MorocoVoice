@@ -7,6 +7,7 @@ and crash-proof in-dock status notifications.
 
 from __future__ import annotations
 
+import ctypes
 import json
 import os
 import subprocess
@@ -157,6 +158,22 @@ def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool
         return False, f"Error al verificar la clave de Groq: {e}"
 
 
+def _apply_dark_title_bar(window: tk.Toplevel) -> None:
+    """Enable immersive dark mode for the native Windows title bar."""
+    try:
+        window.update_idletasks()
+        hwnd_id = window.winfo_id()
+        hwnd = ctypes.windll.user32.GetAncestor(hwnd_id, 2)  # GA_ROOT = 2
+        if hwnd:
+            value = ctypes.c_int(1)
+            # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Win 11 / Win 10 20H1+), 19 (older Win 10)
+            res = ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
+            if res != 0:
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(value), ctypes.sizeof(value))
+    except Exception as exc:
+        logger.debug("Could not apply dark title bar: %s", exc)
+
+
 class SettingsModal:
     """Spotify-styled dark modal for MorocoVoice settings with spacious 2-column layout."""
 
@@ -242,9 +259,21 @@ class SettingsModal:
         self.window.bind("<Escape>", lambda e: self._on_cancel())
 
         self._center_window()
+        _apply_dark_title_bar(self.window)
+        ico_path = (self.config_path.parent / "morocovoice.ico").resolve()
+        if ico_path.exists():
+            try:
+                self.window.iconbitmap(str(ico_path))
+            except Exception:
+                pass
         self._setup_ttk_styles()
         self._build_ui()
         self._refresh_all_keycaps()
+
+    def _apply_dark_title_bar(self) -> None:
+        """Alias for module level dark title bar applicator."""
+        if self.window:
+            _apply_dark_title_bar(self.window)
 
     def _setup_ttk_styles(self) -> None:
         """Apply dark Spotify styling to ttk widgets using clam theme."""
