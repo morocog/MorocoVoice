@@ -33,6 +33,11 @@
   - `Win + Space` conservado como atajo principal de dictado.
   - Portapapeles (`CF_UNICODETEXT`) conservado con `Ctrl+V` y guardado en historial de Windows (`Win + V`).
   - Documentado con 100% de transparencia en `README.md`.
+- [x] **[PORTAPAPELES PERMANENTE & BLINDAJE WIN+V]** Se desactivó la restauración automática del portapapeles en `inject_text` (`restore_clipboard=False`). El texto transcrito o refinado ahora permanece en el portapapeles para evitar pérdidas si el foco de texto no estaba activo al hablar. Se blindó `set_clipboard_text` para ignorar cadenas vacías, eliminando al 100% las entradas en blanco en el historial de `Win + V`. *(Resuelto v1.0.5)*
+- [x] **[DEPURACIÓN DE ATAJOS CANÓNICOS]** Eliminadas referencias espurias a `hotkey_diagnostics` y `hotkey_settings` de `config.json` y `config.example.json`. Únicamente se conservan y mapean los atajos de dictado (`Win + Space`) y reescritura (`Ctrl + Shift + Space`). *(Resuelto v1.0.5)*
+- [x] **[CORRECCIÓN DE INSTALADOR RUN.BAT & SYS.PATH]** Corregido error de sintaxis en Batch por paréntesis anidados en comprobación de Python (`sys.hexversion >= 0x030B0000`) e inyectada la raíz del proyecto a `sys.path` en `app/main.py`. *(Resuelto v1.0.5)*
+- [x] **[MODELOS GROQ ACTIVOS]** Actualizados fallbacks de Groq LLM a `openai/gpt-oss-120b` y `openai/gpt-oss-20b`, evitando errores 404. *(Resuelto v1.0.5)*
+
 
 ---
 
@@ -46,3 +51,6 @@
 
 ### 2C · UX Avanzada
 - [ ] **Selector de Dispositivo de Audio en Ajustes:** Permitir elegir el micrófono deseado en lugar del predeterminado de Windows.
+
+### 2D · Compatibilidad Windows 11 NotifyIconSettings & Versión de Python
+- [ ] **Alineación de Python 3.12 vs 3.13 en Bandeja de Windows 11:** En Windows 11, `Shell_NotifyIcon(NIM_ADD)` falla con `0x80004005` bajo Python 3.13 debido a que la entrada registrada en `HKCU\Control Panel\NotifyIconSettings` pertenece a Python 3.12 (`C:\Users\moroc\AppData\Local\Programs\Python\Python312\pythonw.exe`). Priorizar en `run.bat` la selección de Python 3.12 o actualizar la entrada de registro para restaurar el icono en la bandeja.
