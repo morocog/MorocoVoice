@@ -865,7 +865,7 @@ class SettingsModal:
         # 1-Click Key helper link
         groq_link_row = tk.Frame(card_engine, bg=COLOR_PANEL)
         groq_link_row.pack(fill=tk.X, pady=(2, 6))
-        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=18).pack(side=tk.LEFT)
+        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=26).pack(side=tk.LEFT, padx=(0, 10))
         btn_get_key = tk.Button(
             groq_link_row,
             text="🔑 Obtener clave gratuita en console.groq.com (1 clic)",
@@ -1069,7 +1069,7 @@ class SettingsModal:
         ).pack(side=tk.LEFT)
 
         if help_text:
-            tk.Label(
+            desc_lbl = tk.Label(
                 container,
                 text=help_text,
                 font=("Segoe UI", 8),
@@ -1077,7 +1077,14 @@ class SettingsModal:
                 bg=COLOR_PANEL,
                 anchor="w",
                 justify=tk.LEFT,
-            ).pack(fill=tk.X, anchor="w", pady=(2, 0))
+            )
+            desc_lbl.pack(fill=tk.X, anchor="w", pady=(2, 0))
+
+            def _update_desc_wraplength(event: tk.Event) -> None:
+                avail_w = max(240, event.width - 10)
+                desc_lbl.configure(wraplength=avail_w)
+
+            container.bind("<Configure>", _update_desc_wraplength)
 
         # Controls row: keycaps on the left, manual input & capture button on the right
         controls_row = tk.Frame(container, bg=COLOR_PANEL)
@@ -1186,7 +1193,7 @@ class SettingsModal:
     def _create_labeled_row(
         self, parent: tk.Frame, label: str, help_text: str = ""
     ) -> tuple[tk.Frame, Callable[[], None]]:
-        """Create standardized left label and right control container with optional caption."""
+        """Create standardized left label and right control container with crisp, unified vertical alignment."""
         row = tk.Frame(parent, bg=COLOR_PANEL)
         row.pack(fill=tk.X, pady=5)
 
@@ -1196,23 +1203,31 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=20,
+            width=26,
             anchor="w",
-        ).pack(side=tk.LEFT)
+        ).pack(side=tk.LEFT, padx=(0, 10))
 
         outer_container = tk.Frame(row, bg=COLOR_PANEL)
         outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         def pack_help() -> None:
             if help_text:
-                tk.Label(
+                help_lbl = tk.Label(
                     outer_container,
                     text=help_text,
                     font=("Segoe UI", 7),
                     fg=COLOR_TEXT_HINT,
                     bg=COLOR_PANEL,
                     anchor="w",
-                ).pack(fill=tk.X, pady=(2, 0))
+                    justify=tk.LEFT,
+                )
+                help_lbl.pack(fill=tk.X, pady=(2, 0))
+
+                def _update_wraplength(event: tk.Event) -> None:
+                    avail_w = max(180, event.width - 4)
+                    help_lbl.configure(wraplength=avail_w)
+
+                outer_container.bind("<Configure>", _update_wraplength)
 
         return outer_container, pack_help
 
