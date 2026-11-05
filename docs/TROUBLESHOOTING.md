@@ -17,15 +17,15 @@ de seguridad, y te dice exactamente qué falla. Si prefieres ir directo al sínt
 | El icono existe pero está escondido en el cajón `^` | Política de bandeja de Windows 11 | [2](#2-el-icono-existe-pero-windows-lo-esconde-en-el-cajón-) |
 | `Win+Space` **cambia el idioma del teclado** en vez de dictar | Conflicto con el atajo nativo de Windows | [3](#3-winspace-cambia-el-idioma-del-teclado-en-vez-de-dictar) |
 | Sale el HUD y dice «Escuchando», pero **no se escribe nada** | La ventana destino es elevada (UIPI) | [4](#4-sale-el-hud-pero-no-se-escribe-nada) |
-| Sale el HUD «Admin Activo (Ejecuta como Admin)» | Ventana destino elevada | [4](#4-sale-el-hud-pero-no-se-escribe-nada) |
-| «Error de Micrófono» | Permiso de micrófono o dispositivo ocupado | [5](#5-error-de-micrófono) |
+| Sale el HUD «Ventana de administrador activa (ejecuta MorocoVoice como administrador)» | Ventana destino elevada | [4](#4-sale-el-hud-pero-no-se-escribe-nada) |
+| «Error de micrófono: verifica que esté conectado» | Permiso de micrófono o dispositivo ocupado | [5](#5-error-de-micrófono) |
 
 ---
 
 ## 1. El icono no aparece y ningún atajo funciona (integridad Low)
 
 **Este es el caso más confuso y el más importante.** La aplicación arranca, muestra la
-cápsula flotante *«MorocoVoice Activo»*, no registra ni un solo error… y sin embargo:
+cápsula flotante *«MorocoVoice listo • Dictado: ...»*, no registra ni un solo error… y sin embargo:
 
 - No aparece ningún icono junto al reloj → **no hay acceso a Configuración**.
 - Pulsar `Win+Space` no hace nada (el idioma del teclado sí cambia: eso lo hace Windows).
@@ -167,13 +167,14 @@ Shell_NotifyIcon(NIM_ADD) FAILED ([WinError 5] Acceso denegado.)
 
 Eso es el caso de la [sección 1](#1-el-icono-no-aparece-y-ningún-atajo-funciona-integridad-low).
 
-### Acceso Garantizado a Configuración y Diagnóstico
+### Acceso garantizado a Configuración y diagnóstico
 
 Para evitar colisiones de teclado globales y proteger la ergonomía del sistema operativo, MorocoVoice mantiene estrictamente **dos atajos de teclado oficiales** (Dictado y Reescritura).
 
 El acceso a las opciones del sistema se realiza de forma directa mediante:
-- **Doble clic** en el icono del micrófono en la bandeja del sistema (o clic derecho → Configuración).
-- O ejecutando el asistente **`diagnostico.bat`** en la raíz del proyecto para abrir la configuración o inspeccionar `morocovoice.log` sin necesidad de atajos de teclado adicionales.
+- **Clic izquierdo, doble clic o clic derecho** en el icono del micrófono en la bandeja del sistema (menú **⚙️ Configuración…**).
+- Editando directamente el archivo **`config.json`** en la raíz del proyecto.
+- O ejecutando el asistente **`diagnostico.bat`** en la raíz del proyecto para auditar el entorno de seguridad, audio y registros.
 
 ---
 
@@ -190,8 +191,7 @@ dictar.
 **Recomendación:** cambia el atajo de dictado por uno que no colisione. Buenas opciones:
 `Ctrl + Alt + Space`, `Ctrl + Shift + D`… o cualquier combinación libre.
 
-- Desde la UI: clic derecho en el icono → **⚙️ Configuración…** → *Dictado Inteligente*.
-- O ejecutando `diagnostico.bat`.
+- Desde la UI: clic o clic derecho en el icono → **⚙️ Configuración…** → *Dictado inteligente*.
 - O editando `config.json`:
 
 ```json
@@ -208,7 +208,7 @@ dictar.
 
 Casi siempre es **UIPI** (User Interface Privilege Isolation): si la ventana en la que
 quieres escribir corre **como Administrador**, un proceso normal no puede inyectarle
-texto. MorocoVoice lo detecta y muestra **«Admin Activo (Ejecuta como Admin)»**.
+texto. MorocoVoice lo detecta y muestra **«Ventana de administrador activa (ejecuta MorocoVoice como administrador)»**.
 
 Opciones:
 
@@ -240,7 +240,7 @@ Target app <nombre> is elevated. UIPI prevents injection.
 
 Ruta: **`morocovoice.log`** en la carpeta del proyecto. Rota a los 5 MB (3 copias).
 
-Ábrelo con `Ctrl + Shift + D` o desde el menú del icono (**Abrir Logs**).
+Ábrelo desde el menú del icono en la bandeja del sistema (**Abrir registro (logs)**) o directamente con el Bloc de notas en la carpeta del proyecto.
 
 Líneas útiles:
 

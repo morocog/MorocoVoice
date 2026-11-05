@@ -92,7 +92,7 @@ def _instrument_pystray() -> None:
             logger.error(
                 "Shell_NotifyIcon(NIM_ADD) FAILED (%s). Windows rejected the tray "
                 "icon, so it will NOT appear in the notification area. Dictation "
-                "still works; run diagnostico.bat to open Settings or view logs. "
+                "still works; run diagnostico.bat to inspect security context and logs. "
                 "If the notification area is simply hiding the "
                 "icon, enable it in Configuracion > Personalizacion > Barra de "
                 "tareas > Otros iconos. See docs/TROUBLESHOOTING.md.",
@@ -169,7 +169,7 @@ class SystemTrayManager:
             pystray.MenuItem(self._get_vad_label, None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("⚙️ Configuración...", self._on_settings_clicked, default=True),
-            pystray.MenuItem("Abrir Logs", self._on_open_logs),
+            pystray.MenuItem("Abrir registro (logs)", self._on_open_logs),
             pystray.MenuItem("Salir", self._on_exit_clicked),
         )
 
@@ -201,8 +201,7 @@ class SystemTrayManager:
                 logger.error(
                     "System tray icon FAILED and is now unavailable (no Settings/Exit "
                     "menu next to the clock). The application keeps working for dictation; "
-                    "press %s to open Settings from the keyboard. Cause: %s",
-                    self.hotkey_settings,
+                    "run diagnostico.bat or edit config.json directly. Cause: %s",
                     exc,
                     exc_info=True,
                 )
@@ -213,13 +212,12 @@ class SystemTrayManager:
         logger.info("System tray icon started in daemon thread with atexit ghost protection.")
 
         def _send_welcome_toast() -> None:
-            import time
             time.sleep(1.0)
             if self.icon:
                 try:
                     self.icon.notify(
-                        title="MorocoVoice Activo 🎙️",
-                        message=f"Presiona {self.hotkey_dictation} para dictar o doble clic para Configuración.",
+                        title="MorocoVoice listo 🎙️",
+                        message=f"Presiona {self.hotkey_dictation} para dictar o haz clic en el icono para abrir Configuración.",
                     )
                 except Exception:
                     pass

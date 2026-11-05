@@ -2,7 +2,7 @@
 
 Uses Win32 WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW and MonitorFromPoint to render
 an unobtrusive floating capsule with mouse-drag repositioning and auto-dismiss watchdog.
-Spotify-inspired dark aesthetic with dynamic width and hardware-accelerated rounded corners.
+Spotify-inspired dark aesthetic with dynamic DPI-aware sizing and hardware-accelerated rounded corners.
 """
 
 from __future__ import annotations
@@ -22,26 +22,9 @@ GWL_EXSTYLE = -20
 WS_EX_NOACTIVATE = 0x08000000
 WS_EX_TOOLWINDOW = 0x00000080
 MONITOR_DEFAULTTONEAREST = 2
-
-# Global DPI awareness initialization flag
-_DPI_AWARE_INITIALIZED = False
+GA_ROOT = 2
 
 
-def init_dpi_awareness() -> None:
-    """Set process DPI awareness to Per-Monitor V2 before Tkinter window creation."""
-    global _DPI_AWARE_INITIALIZED
-    if _DPI_AWARE_INITIALIZED:
-        return
-    try:
-        # 2 = PROCESS_PER_MONITOR_DPI_AWARE_V2
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-        _DPI_AWARE_INITIALIZED = True
-        logger.info("Per-Monitor DPI awareness (v2) successfully set.")
-    except Exception as e:
-        logger.warning("Could not set DPI awareness: %s", e)
-
-
-# # VERIFY: RECT structure according to Win32 SDK
 class RECT(ctypes.Structure):
     _fields_ = [
         ("left", wintypes.LONG),
@@ -51,7 +34,6 @@ class RECT(ctypes.Structure):
     ]
 
 
-# # VERIFY: MONITORINFO structure with cbSize initialization
 class MONITORINFO(ctypes.Structure):
     _fields_ = [
         ("cbSize", wintypes.DWORD),
@@ -62,7 +44,7 @@ class MONITORINFO(ctypes.Structure):
 
 
 class FloatingHUD:
-    """Draggable, non-activating, topmost translucent floating HUD with dynamic width."""
+    """Draggable, non-activating, topmost translucent floating HUD with dynamic DPI-aware dimensions."""
 
     def __init__(self, root: tk.Tk, bottom_margin_px: int = 60) -> None:
         self.root = root
@@ -106,7 +88,7 @@ class FloatingHUD:
             self.frame, width=18, height=18, bg="#181818", highlightthickness=0, cursor="fleur"
         )
         self.icon_canvas.pack(side=tk.LEFT, padx=(12, 6), pady=6)
-        self.status_dot = self.icon_canvas.create_oval(2, 2, 16, 16, fill="#ef4444", outline="")
+        self.status_dot = self.icon_canvas.create_oval(2, 2, 16, 16, fill="#EF4444", outline="")
 
         # Status label
         self.label = tk.Label(
@@ -160,7 +142,10 @@ class FloatingHUD:
     def _apply_win32_styles(self) -> None:
         """Apply WS_EX_NOACTIVATE to prevent stealing focus and request DWM rounded corners."""
         try:
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            hwnd_id = self.root.winfo_id()
+            hwnd = ctypes.windll.user32.GetAncestor(hwnd_id, GA_ROOT) or ctypes.windll.user32.GetParent(hwnd_id)
+            if not hwnd:
+                return
             ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             new_style = ex_style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
@@ -203,25 +188,34 @@ class FloatingHUD:
 
         self.root.geometry(f"{self.width}x{self.height}+{x}+{y}")
 
-    def show(self, text: str = "Escuchando...", state: AppState = AppState.RECORDING) -> None:
-        """Update display status and reveal HUD with dynamic sizing and state-aware watchdog timeout."""
+    def show(
+        self,
+        text: str = "Escuchando...",
+        state: AppState = AppState.RECORDING,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Update display status and reveal HUD with dynamic DPI-aware sizing and single cancellable timer."""
         self.state = state
 
-        # Dynamic width calculation to prevent any text truncation or clipping
+        # Dynamic width and height calculation to prevent clipping across all DPI scale factors
         if self._label_font is None:
             try:
-                self._label_font = tkfont.Font(family="Segoe UI", size=9, weight="bold")
+                self._label_font = tkfont.Font(root=self.root, family="Segoe UI", size=9, weight="bold")
             except Exception:
                 self._label_font = None
 
         if self._label_font is not None:
             try:
                 text_width = self._label_font.measure(text)
+                linespace = self._label_font.metrics("linespace")
                 self.width = max(260, text_width + 88)
+                self.height = max(44, linespace + 26)
             except Exception:
                 self.width = max(260, len(text) * 9 + 88)
+                self.height = 46
         else:
             self.width = max(260, len(text) * 9 + 88)
+            self.height = 46
 
         self._reposition()
 
@@ -237,8 +231,11 @@ class FloatingHUD:
         elif state == AppState.ERROR:
             self.icon_canvas.itemconfig(self.status_dot, fill="#FECA66")
             self.label.configure(text=text, fg="#FEF3C7")
+        else:
+            self.icon_canvas.itemconfig(self.status_dot, fill="#B3B3B3")
+            self.label.configure(text=text, fg="#B3B3B3")
 
-        # Auto-dismiss safety watchdog per state
+        # Single cancellable auto-dismiss safety watchdog
         if self._auto_dismiss_timer is not None:
             try:
                 self.root.after_cancel(self._auto_dismiss_timer)
@@ -246,25 +243,32 @@ class FloatingHUD:
                 pass
             self._auto_dismiss_timer = None
 
-        timeout_ms = 4000
-        if state == AppState.RECORDING:
+        if duration_ms is not None:
+            timeout_ms = duration_ms
+        elif state == AppState.RECORDING:
             timeout_ms = 65000
         elif state == AppState.PROCESSING:
             timeout_ms = 12000
         elif state == AppState.INJECTING:
-            timeout_ms = 4000
+            timeout_ms = 3500
         elif state == AppState.ERROR:
             timeout_ms = 3500
+        else:
+            timeout_ms = 4000
 
         self._auto_dismiss_timer = self.root.after(timeout_ms, self.hide)
 
         self.root.deiconify()
+        self._apply_win32_styles()
         self.root.lift()
 
     def show_uipi_alert(self) -> None:
         """Display specific warning when target window is elevated as Administrator."""
-        self.show(text="Admin Activo (Ejecuta como Admin)", state=AppState.ERROR)
-        self.root.after(3500, self.hide)
+        self.show(
+            text="Ventana de administrador activa (ejecuta MorocoVoice como administrador)",
+            state=AppState.ERROR,
+            duration_ms=3500,
+        )
 
     def hide(self) -> None:
         """Withdraw HUD window from view."""

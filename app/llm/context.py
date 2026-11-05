@@ -21,12 +21,6 @@ logger = get_logger("context")
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 TOKEN_QUERY = 0x0008
 TokenElevation = 20
-VK_CONTROL = 0x11
-VK_C = 0x43
-KEYEVENTF_KEYUP = 0x0002
-INPUT_KEYBOARD = 1
-
-ULONG_PTR = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
 
 
 # VERIFY: TOKEN_ELEVATION Win32 structure mapping

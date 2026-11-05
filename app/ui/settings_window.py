@@ -18,10 +18,21 @@ from collections.abc import Callable
 from pathlib import Path
 from tkinter import messagebox, ttk
 
+from app import __version__
+from app.config import (
+    is_valid_groq_api_key,
+    load_config,
+    persist_groq_api_key_to_env,
+    verify_groq_api_key_online,
+)
 from app.contracts import AppConfig, AudioEngineType
+from app.engine.engine_manager import MAX_VOCABULARY_TERMS, load_raw_vocabulary_terms
 from app.logging_setup import get_logger
 
 logger = get_logger("settings_ui")
+
+# Backward-compatible alias for unit tests importing _persist_groq_api_key_to_env
+_persist_groq_api_key_to_env = persist_groq_api_key_to_env
 
 # Spotify-inspired Design System Palette
 COLOR_CANVAS = "#121212"        # Base canvas background
@@ -33,7 +44,6 @@ COLOR_INPUT_BORDER = "#333333"  # Subtle input outline
 COLOR_INPUT_FOCUS = "#1DB954"   # Active input border (Spotify green)
 COLOR_SPOTIFY = "#1DB954"       # Primary brand green
 COLOR_SPOTIFY_HOVER = "#1ED760" # Hover green
-COLOR_SPOTIFY_ACTIVE = "#169C46"# Pressed green
 COLOR_TEXT_WHITE = "#FFFFFF"    # Crisp primary text
 COLOR_TEXT_MUTED = "#B3B3B3"    # Subtitles and descriptions
 COLOR_TEXT_HINT = "#727272"     # Captions and placeholders
@@ -41,6 +51,30 @@ COLOR_DANGER = "#F15E6C"        # Error state
 COLOR_GOLD = "#FECA66"          # Telat accent
 COLOR_CHIP_BG = "#282828"       # Keycap chip background
 COLOR_CHIP_BORDER = "#3E3E3E"   # Keycap chip border
+
+# Win32 Virtual-Key codes for Left/Right Windows keys
+VK_LWIN = 0x5B
+VK_RWIN = 0x5C
+
+MODIFIER_KEYSYM_MAP: dict[str, str] = {
+    "control_l": "ctrl",
+    "control_r": "ctrl",
+    "shift_l": "shift",
+    "shift_r": "shift",
+    "alt_l": "alt",
+    "alt_r": "alt",
+    "win_l": "win",
+    "win_r": "win",
+    "super_l": "win",
+    "super_r": "win",
+}
+
+KEYSYM_NORMALIZATION_MAP: dict[str, str] = {
+    "return": "enter",
+    "prior": "page up",
+    "next": "page down",
+    "back_space": "backspace",
+}
 
 RECOMMENDED_VOCABULARY: list[str] = [
     "GitHub",
@@ -76,8 +110,58 @@ RECOMMENDED_VOCABULARY: list[str] = [
 ]
 
 
+def _is_win_key_hardware_pressed() -> bool:
+    """Query Win32 GetAsyncKeyState to detect held Left/Right Windows keys."""
+    try:
+        lwin = ctypes.windll.user32.GetAsyncKeyState(VK_LWIN) & 0x8000
+        rwin = ctypes.windll.user32.GetAsyncKeyState(VK_RWIN) & 0x8000
+        return bool(lwin or rwin)
+    except Exception:
+        return False
+
+
+def resolve_captured_hotkey_event(
+    event: tk.Event, held_mods: set[str] | None = None
+) -> str | None:
+    """Resolve a Tkinter KeyPress event into a normalized shortcut string.
+
+    Returns:
+        - `"CANCEL"` if Escape was pressed.
+        - `None` if only a modifier key was pressed (waiting for main key).
+        - Normalized shortcut string (e.g. `"win+space"`, `"ctrl+shift+space"`) when complete.
+    """
+    sym = (getattr(event, "keysym", "") or "").lower()
+    if not sym:
+        return None
+    if sym == "escape":
+        return "CANCEL"
+
+    if sym in MODIFIER_KEYSYM_MAP:
+        if held_mods is not None:
+            held_mods.add(MODIFIER_KEYSYM_MAP[sym])
+        return None
+
+    state = int(getattr(event, "state", 0) or 0)
+    active_mods: set[str] = set(held_mods) if held_mods else set()
+
+    # Tkinter event.state bitmask: 0x4 = Control, 0x1 = Shift, 0x20000 / 0x8 = Alt
+    if state & 0x4:
+        active_mods.add("ctrl")
+    if state & 0x1:
+        active_mods.add("shift")
+    if (state & 0x8) or (state & 0x20000):
+        active_mods.add("alt")
+    if _is_win_key_hardware_pressed():
+        active_mods.add("win")
+
+    ordered_mods = [m for m in ("ctrl", "alt", "shift", "win") if m in active_mods]
+    key_name = KEYSYM_NORMALIZATION_MAP.get(sym, sym)
+    combo_parts = ordered_mods + ([key_name] if key_name not in ordered_mods else [])
+    return "+".join(combo_parts)
+
+
 class PillButton(tk.Canvas):
-    """Authentic Spotify-styled pill button drawn natively on Canvas with smooth hover transitions."""
+    """Authentic Spotify-styled pill button drawn natively on Canvas with smooth hover and keyboard support."""
 
     def __init__(
         self,
@@ -95,6 +179,7 @@ class PillButton(tk.Canvas):
         canvas_bg: str = COLOR_PANEL,
         **kwargs,
     ) -> None:
+        self.parent_widget = parent
         self.text_str = text
         self.command = command
         self.bg_color = bg_color
@@ -106,19 +191,9 @@ class PillButton(tk.Canvas):
         self.padx = padx
         self.pady = pady
         self.canvas_bg = canvas_bg
+        self._has_focus = False
 
-        # Measure text width safely
-        fnt_family = font[0]
-        fnt_size = font[1]
-        fnt_weight = font[2] if len(font) > 2 else "normal"
-        try:
-            tk_fnt = tkfont.Font(family=fnt_family, size=fnt_size, weight=fnt_weight)
-            text_w = tk_fnt.measure(text)
-            text_h = tk_fnt.metrics("linespace")
-        except Exception:
-            text_w = len(text) * 8
-            text_h = 16
-
+        text_w, text_h = self._measure_text(text)
         self.w = max(40, text_w + padx * 2)
         self.h = max(24, text_h + pady * 2)
 
@@ -128,6 +203,7 @@ class PillButton(tk.Canvas):
             height=self.h,
             bg=canvas_bg,
             highlightthickness=0,
+            takefocus=1,
             cursor="hand2",
             **kwargs,
         )
@@ -135,18 +211,60 @@ class PillButton(tk.Canvas):
         self.draw(self.bg_color, self.fg_color)
         self.bind("<Enter>", lambda e: self.draw(self.hover_bg, self.hover_fg))
         self.bind("<Leave>", lambda e: self.draw(self.bg_color, self.fg_color))
-        self.bind("<Button-1>", lambda e: self._on_click())
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
+        self.bind("<Button-1>", self._on_button_press)
+        self.bind("<ButtonRelease-1>", self._on_button_release)
+        self.bind("<Return>", lambda e: self._on_click())
+        self.bind("<space>", lambda e: self._on_click())
+
+    def _measure_text(self, text: str) -> tuple[int, int]:
+        """Measure text width and line height using DPI-aware font metrics."""
+        fnt_family = self.fnt[0]
+        fnt_size = self.fnt[1]
+        fnt_weight = self.fnt[2] if len(self.fnt) > 2 else "normal"
+        try:
+            tk_fnt = tkfont.Font(
+                root=self.parent_widget,
+                family=fnt_family,
+                size=fnt_size,
+                weight=fnt_weight,
+            )
+            return int(tk_fnt.measure(text)), int(tk_fnt.metrics("linespace"))
+        except Exception:
+            return len(text) * 8, 16
+
+    def _on_focus_in(self, _: tk.Event) -> None:
+        self._has_focus = True
+        self.draw(self.bg_color, self.fg_color)
+
+    def _on_focus_out(self, _: tk.Event) -> None:
+        self._has_focus = False
+        self.draw(self.bg_color, self.fg_color)
+
+    def _on_button_press(self, _: tk.Event) -> None:
+        try:
+            self.focus_set()
+        except Exception:
+            pass
+
+    def _on_button_release(self, event: tk.Event) -> None:
+        x = getattr(event, "x", 0)
+        y = getattr(event, "y", 0)
+        if 0 <= x <= self.w and 0 <= y <= self.h:
+            self._on_click()
 
     def draw(self, bg_col: str, fg_col: str) -> None:
         """Render rounded pill capsule geometry and centered label."""
         self.delete("all")
         r = self.h // 2
         w, h = self.w, self.h
-        if self.border_color:
+        active_border = COLOR_TEXT_WHITE if self._has_focus else self.border_color
+        if active_border:
             # Outer border pill
-            self.create_arc(0, 0, 2 * r, 2 * r, start=90, extent=180, fill=self.border_color, outline="")
-            self.create_arc(w - 2 * r, 0, w, 2 * r, start=270, extent=180, fill=self.border_color, outline="")
-            self.create_rectangle(r, 0, w - r, h, fill=self.border_color, outline="")
+            self.create_arc(0, 0, 2 * r, 2 * r, start=90, extent=180, fill=active_border, outline="")
+            self.create_arc(w - 2 * r, 0, w, 2 * r, start=270, extent=180, fill=active_border, outline="")
+            self.create_rectangle(r, 0, w - r, h, fill=active_border, outline="")
             # Inner body pill
             self.create_arc(1, 1, 2 * r - 1, 2 * r - 1, start=90, extent=180, fill=bg_col, outline="")
             self.create_arc(w - 2 * r + 1, 1, w - 1, 2 * r - 1, start=270, extent=180, fill=bg_col, outline="")
@@ -157,39 +275,48 @@ class PillButton(tk.Canvas):
             self.create_rectangle(r, 0, w - r, h, fill=bg_col, outline="")
         self.create_text(w // 2, h // 2, text=self.text_str, fill=fg_col, font=self.fnt)
 
-    def set_text(self, text: str, bg_color: str | None = None, fg_color: str | None = None) -> None:
+    def set_text(
+        self,
+        text: str,
+        bg_color: str | None = None,
+        fg_color: str | None = None,
+        hover_bg: str | None = None,
+        hover_fg: str | None = None,
+    ) -> None:
         """Update button text and recalculate capsule width smoothly."""
         self.text_str = text
         if bg_color:
             self.bg_color = bg_color
         if fg_color:
             self.fg_color = fg_color
+        if hover_bg:
+            self.hover_bg = hover_bg
+        if hover_fg:
+            self.hover_fg = hover_fg
 
-        fnt_family = self.fnt[0]
-        fnt_size = self.fnt[1]
-        fnt_weight = self.fnt[2] if len(self.fnt) > 2 else "normal"
-        try:
-            tk_fnt = tkfont.Font(family=fnt_family, size=fnt_size, weight=fnt_weight)
-            text_w = tk_fnt.measure(text)
-            text_h = tk_fnt.metrics("linespace")
-        except Exception:
-            text_w = len(text) * 8
-            text_h = 16
+        text_w, text_h = self._measure_text(text)
         self.w = max(40, text_w + self.padx * 2)
         self.h = max(24, text_h + self.pady * 2)
         self.configure(width=self.w, height=self.h)
         self.draw(self.bg_color, self.fg_color)
 
     def set_colors(
-        self, bg_color: str, fg_color: str, hover_bg: str | None = None, hover_fg: str | None = None
+        self,
+        bg_color: str,
+        fg_color: str,
+        hover_bg: str | None = None,
+        hover_fg: str | None = None,
+        border_color: str | None = "__keep__",
     ) -> None:
-        """Change normal and hover color states dynamically."""
+        """Change normal, hover, and border color states dynamically."""
         self.bg_color = bg_color
         self.fg_color = fg_color
         if hover_bg:
             self.hover_bg = hover_bg
         if hover_fg:
             self.hover_fg = hover_fg
+        if border_color != "__keep__":
+            self.border_color = border_color
         self.draw(self.bg_color, self.fg_color)
 
     def cget(self, key: str):
@@ -231,61 +358,6 @@ def _bind_hover(
     widget.bind("<Leave>", on_leave)
 
 
-def _persist_groq_api_key_to_env(env_path: Path, api_key: str) -> None:
-    """Safely persist or update GROQ_API_KEY in .env file without destroying other variables."""
-    lines: list[str] = []
-    key_found = False
-    if env_path.exists():
-        try:
-            with open(env_path, encoding="utf-8") as f:
-                lines = f.readlines()
-        except Exception as e:
-            logger.warning("Could not read existing .env: %s", e)
-
-    new_lines: list[str] = []
-    for line in lines:
-        stripped = line.strip()
-        if stripped.startswith("GROQ_API_KEY=") or stripped.startswith("GROQ_API_KEY ="):
-            new_lines.append(f"GROQ_API_KEY={api_key}\n")
-            key_found = True
-        else:
-            new_lines.append(line)
-
-    if not key_found:
-        if new_lines and not new_lines[-1].endswith("\n"):
-            new_lines.append("\n")
-        new_lines.append(f"GROQ_API_KEY={api_key}\n")
-
-    try:
-        with open(env_path, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
-        logger.info("GROQ_API_KEY persisted securely to .env")
-    except Exception as e:
-        logger.error("Failed to write GROQ_API_KEY to %s: %s", env_path, e)
-
-
-def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool, str]:
-    """Verify Groq API key by attempting to fetch model list with short timeout and no retries."""
-    try:
-        from groq import Groq
-        client = Groq(api_key=api_key, timeout=timeout, max_retries=0)
-        client.models.list()
-        return True, "Clave válida y autorizada."
-    except Exception as e:
-        err_msg = str(e)
-        if "401" in err_msg or "invalid_api_key" in err_msg.lower() or "unauthorized" in err_msg.lower():
-            return False, "La clave de Groq es inválida o fue revocada (Error 401: Unauthorized)."
-        elif (
-            "connection" in err_msg.lower()
-            or "timeout" in err_msg.lower()
-            or "429" in err_msg
-            or "500" in err_msg
-            or "503" in err_msg
-        ):
-            return True, "No se pudo verificar la conexión con Groq (sin internet, timeout o límite de tasa), pero la clave fue guardada."
-        return False, f"Error al verificar la clave de Groq: {e}"
-
-
 def _apply_dark_title_bar(window: tk.Toplevel) -> None:
     """Enable immersive dark mode for the native Windows title bar."""
     try:
@@ -295,9 +367,13 @@ def _apply_dark_title_bar(window: tk.Toplevel) -> None:
         if hwnd:
             value = ctypes.c_int(1)
             # DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (Win 11 / Win 10 20H1+), 19 (older Win 10)
-            res = ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
+            res = ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 20, ctypes.byref(value), ctypes.sizeof(value)
+            )
             if res != 0:
-                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 19, ctypes.byref(value), ctypes.sizeof(value))
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                    hwnd, 19, ctypes.byref(value), ctypes.sizeof(value)
+                )
     except Exception as exc:
         logger.debug("Could not apply dark title bar: %s", exc)
 
@@ -315,13 +391,20 @@ class SettingsModal:
         self.parent = parent
         self.config_path = Path(config_file_path).resolve()
         self.current_config = current_config
-        self.vocab_path = (self.config_path.parent / getattr(self.current_config, "custom_vocabulary_path", "custom_vocabulary.json")).resolve()
+        self.vocab_path = (
+            self.config_path.parent
+            / getattr(self.current_config, "custom_vocabulary_path", "custom_vocabulary.json")
+        ).resolve()
         self.on_saved = on_saved
 
         self.window: tk.Toplevel | None = None
         self.vocab_text: tk.Text | None = None
         self.vocab_counter_lbl: tk.Label | None = None
         self.toast_lbl: tk.Label | None = None
+        self._toast_timer_id: str | None = None
+        self._close_timer_id: str | None = None
+        self._active_capture_cleanup: Callable[[], None] | None = None
+        self._had_valid_key_on_open: bool = False
 
         # Variables for form controls
         self.var_dictation = tk.StringVar()
@@ -358,21 +441,19 @@ class SettingsModal:
         self.var_delay_ms.set(cfg.clipboard_restore_delay_ms or 80)
 
     def show(self) -> None:
-        """Construct and display the settings modal, always reading fresh config from disk."""
-        from app.config import load_config
+        """Construct and display the settings modal, preserving unsaved edits if already open."""
+        if self.window is not None and self.window.winfo_exists():
+            self.window.lift()
+            self.window.focus_force()
+            return
+
         try:
             self.current_config = load_config(self.config_path)
         except Exception as e:
             logger.warning("Could not refresh config on show: %s", e)
 
+        self._had_valid_key_on_open = is_valid_groq_api_key(self.current_config.groq_api_key)
         self._sync_inputs_from_config(self.current_config)
-
-        if self.window is not None and self.window.winfo_exists():
-            self.window.lift()
-            self.window.focus_force()
-            self._load_current_vocabulary_into_ui()
-            self._refresh_all_keycaps()
-            return
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("MorocoVoice - Configuración")
@@ -382,8 +463,16 @@ class SettingsModal:
         self.window.resizable(True, True)
         self.window.configure(bg=COLOR_CANVAS)
 
+        # Pulse -topmost briefly so the modal surfaces in front of all apps, then release
+        # so external windows (browser for Groq console, Notepad for config.json) are not hidden behind it
         self.window.attributes("-topmost", True)
         self.window.focus_force()
+        self.window.after(
+            250,
+            lambda: self.window is not None
+            and self.window.winfo_exists()
+            and self.window.attributes("-topmost", False),
+        )
         self.window.bind("<Escape>", lambda e: self._on_cancel())
 
         self._center_window()
@@ -397,11 +486,6 @@ class SettingsModal:
         self._setup_ttk_styles()
         self._build_ui()
         self._refresh_all_keycaps()
-
-    def _apply_dark_title_bar(self) -> None:
-        """Alias for module level dark title bar applicator."""
-        if self.window:
-            _apply_dark_title_bar(self.window)
 
     def _setup_ttk_styles(self) -> None:
         """Apply dark Spotify styling to ttk widgets using clam theme."""
@@ -432,6 +516,22 @@ class SettingsModal:
                 lightcolor=[("focus", COLOR_SPOTIFY)],
                 darkcolor=[("focus", COLOR_SPOTIFY)],
                 arrowcolor=[("active", COLOR_SPOTIFY_HOVER), ("focus", COLOR_SPOTIFY)],
+            )
+
+            # Configure Dark.Vertical.TScrollbar
+            style.configure(
+                "Dark.Vertical.TScrollbar",
+                troughcolor=COLOR_CANVAS,
+                background=COLOR_PANEL_HOVER,
+                darkcolor=COLOR_PANEL,
+                lightcolor=COLOR_PANEL,
+                bordercolor=COLOR_CARD_BORDER,
+                arrowcolor=COLOR_TEXT_MUTED,
+                relief="flat",
+            )
+            style.map(
+                "Dark.Vertical.TScrollbar",
+                background=[("active", COLOR_SPOTIFY), ("pressed", COLOR_SPOTIFY_HOVER)],
             )
 
             # Dropdown popup listbox dark theme options
@@ -465,7 +565,14 @@ class SettingsModal:
         brand_frame = tk.Frame(header, bg=COLOR_PANEL)
         brand_frame.pack(side=tk.LEFT, padx=24, pady=12)
 
-        icon_badge = tk.Frame(brand_frame, bg="#242424", padx=8, pady=6, highlightthickness=1, highlightbackground=COLOR_CARD_BORDER)
+        icon_badge = tk.Frame(
+            brand_frame,
+            bg="#242424",
+            padx=8,
+            pady=6,
+            highlightthickness=1,
+            highlightbackground=COLOR_CARD_BORDER,
+        )
         icon_badge.pack(side=tk.LEFT, padx=(0, 14))
 
         icon_dot = tk.Label(
@@ -490,7 +597,7 @@ class SettingsModal:
 
         tk.Label(
             title_box,
-            text="Centro de Control de Dictado y Modelos IA",
+            text="Centro de control de dictado y modelos de IA",
             font=("Segoe UI", 8),
             fg=COLOR_TEXT_MUTED,
             bg=COLOR_PANEL,
@@ -498,7 +605,7 @@ class SettingsModal:
 
         version_pill = tk.Label(
             header,
-            text="● v1.0.5",
+            text=f"● v{__version__}",
             font=("Segoe UI", 8, "bold"),
             fg=COLOR_SPOTIFY,
             bg=COLOR_PANEL_HOVER,
@@ -518,7 +625,7 @@ class SettingsModal:
 
         self.btn_tab_general = PillButton(
             nav_bar,
-            text="⚙️ General y Atajos",
+            text="⚙️ General y atajos",
             font=("Segoe UI", 9, "bold"),
             bg_color=COLOR_SPOTIFY,
             fg_color="#000000",
@@ -533,7 +640,7 @@ class SettingsModal:
 
         self.btn_tab_vocab = PillButton(
             nav_bar,
-            text="📖 Vocabulario Personalizado",
+            text="📖 Vocabulario personalizado",
             font=("Segoe UI", 9, "bold"),
             bg_color=COLOR_PANEL,
             fg_color=COLOR_TEXT_MUTED,
@@ -583,7 +690,7 @@ class SettingsModal:
 
         btn_cancel = PillButton(
             dock,
-            text="Minimizar (Esc)",
+            text="Cerrar sin guardar (Esc)",
             font=("Segoe UI", 9),
             bg_color=COLOR_INPUT_BG,
             fg_color=COLOR_TEXT_WHITE,
@@ -599,7 +706,7 @@ class SettingsModal:
 
         btn_save = PillButton(
             dock,
-            text="💾 Guardar y Aplicar",
+            text="💾 Guardar y aplicar",
             font=("Segoe UI", 9, "bold"),
             bg_color=COLOR_SPOTIFY,
             fg_color="#000000",
@@ -626,44 +733,55 @@ class SettingsModal:
 
         self._switch_tab("general")
 
+    def _cancel_active_capture(self) -> None:
+        """Cancel any in-progress hotkey capture session."""
+        if self._active_capture_cleanup is not None:
+            cleanup_fn = self._active_capture_cleanup
+            self._active_capture_cleanup = None
+            try:
+                cleanup_fn()
+            except Exception:
+                pass
+
     def _switch_tab(self, tab_name: str) -> None:
         """Switch between General and Vocabulary tabs with smooth Spotify pill transitions."""
+        self._cancel_active_capture()
         self.active_tab = tab_name
         if tab_name == "general":
             self.tab_vocab_frame.pack_forget()
             self.tab_general_frame.pack(fill=tk.BOTH, expand=True)
 
-            self.btn_tab_general.border_color = None
             self.btn_tab_general.set_colors(
                 bg_color=COLOR_SPOTIFY,
                 fg_color="#000000",
                 hover_bg=COLOR_SPOTIFY_HOVER,
                 hover_fg="#000000",
+                border_color=None,
             )
-            self.btn_tab_vocab.border_color = COLOR_CARD_BORDER
             self.btn_tab_vocab.set_colors(
                 bg_color=COLOR_PANEL,
                 fg_color=COLOR_TEXT_MUTED,
                 hover_bg=COLOR_PANEL_HOVER,
                 hover_fg=COLOR_TEXT_WHITE,
+                border_color=COLOR_CARD_BORDER,
             )
         else:
             self.tab_general_frame.pack_forget()
             self.tab_vocab_frame.pack(fill=tk.BOTH, expand=True)
 
-            self.btn_tab_general.border_color = COLOR_CARD_BORDER
             self.btn_tab_general.set_colors(
                 bg_color=COLOR_PANEL,
                 fg_color=COLOR_TEXT_MUTED,
                 hover_bg=COLOR_PANEL_HOVER,
                 hover_fg=COLOR_TEXT_WHITE,
+                border_color=COLOR_CARD_BORDER,
             )
-            self.btn_tab_vocab.border_color = None
             self.btn_tab_vocab.set_colors(
                 bg_color=COLOR_SPOTIFY,
                 fg_color="#000000",
                 hover_bg=COLOR_SPOTIFY_HOVER,
                 hover_fg="#000000",
+                border_color=None,
             )
 
     def _build_general_tab(self, parent: tk.Frame) -> None:
@@ -672,77 +790,76 @@ class SettingsModal:
         parent.grid_columnconfigure(1, weight=1, uniform="group1")
         parent.grid_rowconfigure(0, weight=1)
 
-        # Left Column: Atajos de Teclado + Comportamiento
+        # Left Column: Atajos de teclado + Comportamiento
         col_left = tk.Frame(parent, bg=COLOR_CANVAS)
         col_left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
-        # Right Column: Motor y Modelos de Inferencia
+        # Right Column: Motor y modelos de inferencia
         col_right = tk.Frame(parent, bg=COLOR_CANVAS)
         col_right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
 
         # === CARD 1 (LEFT): ATAJOS DE TECLADO (CORE ONLY: 2 KEYS) ===
         card_shortcuts = self._create_card(
-            col_left, "⌨️ Atajos de Teclado", "Solo 2 atajos oficiales: hablar y corregir selección."
+            col_left,
+            "⌨️ Atajos de teclado",
+            "Solo 2 atajos oficiales: hablar para dictar y corregir texto seleccionado.",
         )
         self.keycaps_dictation_frame = self._create_hotkey_row(
             card_shortcuts,
-            label="Dictado Inteligente",
+            label="Dictado inteligente",
             var=self.var_dictation,
-            help_text="Habla y transcribe texto en cualquier app activa (default: win+space)",
+            help_text="Habla y escribe en cualquier ventana activa (por omisión: win+space)",
         )
         self.keycaps_rewrite_frame = self._create_hotkey_row(
             card_shortcuts,
-            label="Reescritura Contextual",
+            label="Reescritura contextual",
             var=self.var_rewrite,
-            help_text="Pule y mejora la selección de texto con IA (default: ctrl+shift+space)",
+            help_text="Pule y mejora el texto seleccionado con IA (por omisión: ctrl+shift+space)",
         )
 
-        # === CARD 2 (LEFT): COMPORTAMIENTO Y PORTAPAPELES ===
+        # === CARD 2 (LEFT): COMPORTAMIENTO DE GRABACIÓN ===
         card_behavior = self._create_card(
-            col_left, "⚡ Comportamiento y Portapapeles", "Parámetros de corte de audio y retardo de pegado."
+            col_left,
+            "⚡ Comportamiento de grabación",
+            "El texto dictado también permanece disponible en tu portapapeles (Ctrl+V).",
         )
         self._create_unit_entry_row(
             card_behavior,
-            label="Máx. Grabación:",
+            label="Duración máxima:",
             var=self.var_max_sec,
             unit="segundos",
-            help_text="Límite máximo por dictado antes de corte automático (default: 60)",
-        )
-        self._create_unit_entry_row(
-            card_behavior,
-            label="Retardo Pegado:",
-            var=self.var_delay_ms,
-            unit="milisegundos",
-            help_text="Retardo post-inyección para estabilidad de portapapeles (default: 80)",
+            help_text="Tiempo máximo por dictado antes del corte automático (entre 5 y 300 s, por omisión: 60)",
         )
 
         # === CARD 3 (RIGHT): MOTOR Y MODELOS DE INFERENCIA ===
         card_engine = self._create_card(
-            col_right, "🧠 Motor y Modelos de Inferencia", "Configura la transcripción por voz y el modelo LLM."
+            col_right,
+            "🧠 Motor y modelos de inferencia",
+            "Configura el motor de reconocimiento de voz y el modelo de lenguaje.",
         )
 
         # Engine Combobox
         self._create_combobox_row(
             card_engine,
-            label="Motor de Audio:",
+            label="Motor de audio:",
             var=self.var_engine,
             values=["CLOUD", "LOCAL"],
-            help_text="CLOUD (Groq Whisper ultra-rápido) o LOCAL (offline por CPU)",
+            help_text="CLOUD (Groq Whisper en la nube, ultrarrápido) o LOCAL (en tu equipo sin internet)",
         )
         # STT Language Combobox
         self._create_combobox_row(
             card_engine,
-            label="Idioma STT:",
+            label="Idioma de voz (STT):",
             var=self.var_stt_language,
             values=["es", "en"],
-            help_text="Idioma base de reconocimiento de voz (es = Español, en = English)",
+            help_text="Idioma principal al dictar (es = Español, en = Inglés)",
         )
         # Groq API Key
         self._create_masked_entry_row(
             card_engine,
-            label="Groq API Key:",
+            label="Clave API de Groq:",
             var=self.var_groq_api_key,
-            help_text="Clave de API enmascarada (guardada de forma segura en .env)",
+            help_text="Tu clave privada de Groq (se guarda de forma segura en el archivo .env)",
         )
 
         # 1-Click Key helper link
@@ -767,24 +884,24 @@ class SettingsModal:
         # STT Model
         self._create_entry_row(
             card_engine,
-            label="Modelo STT Groq:",
+            label="Modelo de voz (STT):",
             var=self.var_stt_model,
-            help_text="whisper-large-v3 o whisper-large-v3-turbo",
+            help_text="Ejemplos: whisper-large-v3 (máxima precisión) o whisper-large-v3-turbo",
         )
         # LLM Model
         self._create_entry_row(
             card_engine,
-            label="Modelo LLM Groq:",
+            label="Modelo de lenguaje (LLM):",
             var=self.var_llm_model,
-            help_text="qwen/qwen3.8-27b (Recomendado) o openai/gpt-oss-120b",
+            help_text="Ejemplos: qwen/qwen3.8-27b (recomendado) u openai/gpt-oss-120b",
         )
 
     def _build_vocab_tab(self, parent: tk.Frame) -> None:
         """Build custom vocabulary management with Spotify card aesthetics."""
         card_vocab = self._create_card(
             parent,
-            "📖 Diccionario de Jerga Técnica y Términos Propios",
-            "Hasta 30 palabras o siglas clave (un término por línea) para guiar la fonética de Whisper.",
+            "📖 Diccionario de jerga técnica y términos propios",
+            f"Hasta {MAX_VOCABULARY_TERMS} palabras, nombres o siglas (un término por línea) para mejorar el reconocimiento fonético.",
         )
 
         counter_bar = tk.Frame(card_vocab, bg=COLOR_PANEL)
@@ -792,7 +909,7 @@ class SettingsModal:
 
         self.vocab_counter_lbl = tk.Label(
             counter_bar,
-            text="0 / 30 términos",
+            text=f"0 / {MAX_VOCABULARY_TERMS} términos",
             font=("Segoe UI", 9, "bold"),
             fg=COLOR_SPOTIFY,
             bg=COLOR_PANEL,
@@ -826,7 +943,11 @@ class SettingsModal:
         )
         text_container.pack(fill=tk.BOTH, expand=True, pady=4)
 
-        scrollbar = tk.Scrollbar(text_container, bg=COLOR_PANEL, troughcolor=COLOR_CANVAS)
+        scrollbar = ttk.Scrollbar(
+            text_container,
+            orient=tk.VERTICAL,
+            style="Dark.Vertical.TScrollbar",
+        )
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.vocab_text = tk.Text(
@@ -1002,73 +1123,68 @@ class SettingsModal:
         btn_capture.pack(side=tk.RIGHT)
 
         def start_capture() -> None:
-            btn_capture.set_text("● Presiona teclas...", bg_color=COLOR_GOLD, fg_color="#000000")
-            captured_keys: list[str] = []
+            if not self.window or not self.window.winfo_exists():
+                return
+            self._cancel_active_capture()
+            btn_capture.set_text(
+                "● Presiona teclas...",
+                bg_color=COLOR_GOLD,
+                fg_color="#000000",
+                hover_bg=COLOR_GOLD,
+                hover_fg="#000000",
+            )
+            held_mods: set[str] = set()
+
+            def on_key_release(event: tk.Event) -> str:
+                sym = (getattr(event, "keysym", "") or "").lower()
+                if sym in MODIFIER_KEYSYM_MAP:
+                    held_mods.discard(MODIFIER_KEYSYM_MAP[sym])
+                return "break"
 
             def on_key(event: tk.Event) -> str:
-                sym = event.keysym.lower()
-                if sym == "escape":
+                result = resolve_captured_hotkey_event(event, held_mods)
+                if result == "CANCEL":
                     cleanup()
                     return "break"
-
-                mod_map = {
-                    "control_l": "ctrl",
-                    "control_r": "ctrl",
-                    "shift_l": "shift",
-                    "shift_r": "shift",
-                    "alt_l": "alt",
-                    "alt_r": "alt",
-                    "win_l": "win",
-                    "win_r": "win",
-                    "super_l": "win",
-                    "super_r": "win",
-                }
-
-                current_mods: list[str] = []
-                state = int(event.state)
-                # Tkinter event.state bitmask: 0x4 = Control, 0x1 = Shift, 0x20000 / 0x8 = Alt
-                if state & 0x4 or sym in ("control_l", "control_r"):
-                    if "ctrl" not in current_mods:
-                        current_mods.append("ctrl")
-                if state & 0x1 or sym in ("shift_l", "shift_r"):
-                    if "shift" not in current_mods:
-                        current_mods.append("shift")
-                if state & 0x8 or state & 0x20000 or sym in ("alt_l", "alt_r"):
-                    if "alt" not in current_mods:
-                        current_mods.append("alt")
-
-                key_name = mod_map.get(sym, sym)
-                if key_name not in ("ctrl", "shift", "alt", "win"):
-                    # Non-modifier key was pressed: finalize shortcut!
-                    combo_parts = list(current_mods)
-                    if key_name not in combo_parts:
-                        combo_parts.append(key_name)
-                    final_combo = "+".join(combo_parts)
-                    var.set(final_combo)
-                    self._render_keycap_chips(chips_frame, final_combo)
+                if result:
+                    var.set(result)
+                    self._render_keycap_chips(chips_frame, result)
                     cleanup()
-                    return "break"
                 return "break"
 
             def cleanup() -> None:
+                self._active_capture_cleanup = None
                 try:
-                    self.window.unbind("<KeyPress>")
+                    if self.window and self.window.winfo_exists():
+                        self.window.unbind("<KeyPress>")
+                        self.window.unbind("<KeyRelease>")
+                        self.window.bind("<Escape>", lambda e: self._on_cancel())
                 except Exception:
                     pass
-                btn_capture.set_text("Capturar", bg_color=COLOR_INPUT_BG, fg_color=COLOR_TEXT_WHITE)
-                self.window.bind("<Escape>", lambda e: self._on_cancel())
+                try:
+                    btn_capture.set_text(
+                        "Capturar",
+                        bg_color=COLOR_INPUT_BG,
+                        fg_color=COLOR_TEXT_WHITE,
+                        hover_bg=COLOR_PANEL_HOVER,
+                        hover_fg=COLOR_TEXT_WHITE,
+                    )
+                except Exception:
+                    pass
 
+            self._active_capture_cleanup = cleanup
             self.window.unbind("<Escape>")
             self.window.bind("<KeyPress>", on_key)
+            self.window.bind("<KeyRelease>", on_key_release)
             self.window.focus_set()
 
         btn_capture.command = start_capture
         return chips_frame
 
-    def _create_unit_entry_row(
-        self, parent: tk.Frame, label: str, var: tk.Variable, unit: str, help_text: str = ""
-    ) -> None:
-        """Create a numeric entry row with adjacent unit pill."""
+    def _create_labeled_row(
+        self, parent: tk.Frame, label: str, help_text: str = ""
+    ) -> tuple[tk.Frame, Callable[[], None]]:
+        """Create standardized left label and right control container with optional caption."""
         row = tk.Frame(parent, bg=COLOR_PANEL)
         row.pack(fill=tk.X, pady=5)
 
@@ -1078,12 +1194,31 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=18,
+            width=20,
             anchor="w",
         ).pack(side=tk.LEFT)
 
         outer_container = tk.Frame(row, bg=COLOR_PANEL)
         outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        def pack_help() -> None:
+            if help_text:
+                tk.Label(
+                    outer_container,
+                    text=help_text,
+                    font=("Segoe UI", 7),
+                    fg=COLOR_TEXT_HINT,
+                    bg=COLOR_PANEL,
+                    anchor="w",
+                ).pack(fill=tk.X, pady=(2, 0))
+
+        return outer_container, pack_help
+
+    def _create_unit_entry_row(
+        self, parent: tk.Frame, label: str, var: tk.Variable, unit: str, help_text: str = ""
+    ) -> None:
+        """Create a numeric entry row with adjacent unit pill."""
+        outer_container, pack_help = self._create_labeled_row(parent, label, help_text)
 
         entry_box = tk.Frame(outer_container, bg=COLOR_PANEL)
         entry_box.pack(fill=tk.X)
@@ -1115,36 +1250,13 @@ class SettingsModal:
             highlightbackground=COLOR_CARD_BORDER,
         )
         unit_pill.pack(side=tk.LEFT, padx=8)
-
-        if help_text:
-            tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg=COLOR_TEXT_HINT,
-                bg=COLOR_PANEL,
-                anchor="w",
-            ).pack(fill=tk.X, pady=(2, 0))
+        pack_help()
 
     def _create_entry_row(
         self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
     ) -> None:
         """Create a clean dark text entry row."""
-        row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=5)
-
-        tk.Label(
-            row,
-            text=label,
-            font=("Segoe UI", 9),
-            fg=COLOR_TEXT_WHITE,
-            bg=COLOR_PANEL,
-            width=18,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        outer_container = tk.Frame(row, bg=COLOR_PANEL)
-        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        outer_container, pack_help = self._create_labeled_row(parent, label, help_text)
 
         entry = tk.Entry(
             outer_container,
@@ -1159,36 +1271,13 @@ class SettingsModal:
             highlightcolor=COLOR_INPUT_FOCUS,
         )
         entry.pack(fill=tk.X, expand=True, ipady=4)
-
-        if help_text:
-            tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg=COLOR_TEXT_HINT,
-                bg=COLOR_PANEL,
-                anchor="w",
-            ).pack(fill=tk.X, pady=(2, 0))
+        pack_help()
 
     def _create_masked_entry_row(
         self, parent: tk.Frame, label: str, var: tk.Variable, help_text: str = ""
     ) -> None:
         """Create a masked password/API-key entry with toggle eye button."""
-        row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=5)
-
-        tk.Label(
-            row,
-            text=label,
-            font=("Segoe UI", 9),
-            fg=COLOR_TEXT_WHITE,
-            bg=COLOR_PANEL,
-            width=18,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        outer_container = tk.Frame(row, bg=COLOR_PANEL)
-        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        outer_container, pack_help = self._create_labeled_row(parent, label, help_text)
 
         entry_container = tk.Frame(outer_container, bg=COLOR_PANEL)
         entry_container.pack(fill=tk.X, expand=True)
@@ -1210,7 +1299,7 @@ class SettingsModal:
 
         is_visible = [False]
 
-        def toggle_mask():
+        def toggle_mask() -> None:
             if is_visible[0]:
                 entry.configure(show="*")
                 eye_btn.configure(text="👁️")
@@ -1236,36 +1325,13 @@ class SettingsModal:
         )
         eye_btn.pack(side=tk.LEFT, padx=(6, 0))
         _bind_hover(eye_btn, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
-
-        if help_text:
-            tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg=COLOR_TEXT_HINT,
-                bg=COLOR_PANEL,
-                anchor="w",
-            ).pack(fill=tk.X, pady=(2, 0))
+        pack_help()
 
     def _create_combobox_row(
         self, parent: tk.Frame, label: str, var: tk.Variable, values: list[str], help_text: str = ""
     ) -> None:
         """Create a Combobox row with Dark.TCombobox styling."""
-        row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=5)
-
-        tk.Label(
-            row,
-            text=label,
-            font=("Segoe UI", 9),
-            fg=COLOR_TEXT_WHITE,
-            bg=COLOR_PANEL,
-            width=18,
-            anchor="w",
-        ).pack(side=tk.LEFT)
-
-        outer_container = tk.Frame(row, bg=COLOR_PANEL)
-        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        outer_container, pack_help = self._create_labeled_row(parent, label, help_text)
 
         combo = ttk.Combobox(
             outer_container,
@@ -1275,31 +1341,13 @@ class SettingsModal:
             style="Dark.TCombobox",
         )
         combo.pack(fill=tk.X, expand=True)
-
-        if help_text:
-            tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg=COLOR_TEXT_HINT,
-                bg=COLOR_PANEL,
-                anchor="w",
-            ).pack(fill=tk.X, pady=(2, 0))
+        pack_help()
 
     def _load_current_vocabulary_into_ui(self) -> None:
         """Read custom_vocabulary.json and populate editor."""
         if not self.vocab_text:
             return
-        terms: list[str] = []
-        if self.vocab_path.exists():
-            try:
-                with open(self.vocab_path, encoding="utf-8") as f:
-                    loaded = json.load(f)
-                    if isinstance(loaded, list):
-                        terms = [str(t).strip() for t in loaded if str(t).strip()]
-            except Exception as e:
-                logger.warning("Could not load vocabulary file: %s", e)
-
+        terms = load_raw_vocabulary_terms(self.vocab_path)
         if not terms:
             terms = RECOMMENDED_VOCABULARY
 
@@ -1330,13 +1378,13 @@ class SettingsModal:
         count = len(terms)
         if count <= 25:
             color = COLOR_SPOTIFY
-        elif count <= 30:
+        elif count <= MAX_VOCABULARY_TERMS:
             color = COLOR_GOLD
         else:
             color = COLOR_DANGER
 
         self.vocab_counter_lbl.configure(
-            text=f"{count} / 30 términos",
+            text=f"{count} / {MAX_VOCABULARY_TERMS} términos",
             fg=color,
         )
 
@@ -1347,10 +1395,16 @@ class SettingsModal:
         fg_col = COLOR_DANGER if is_error else COLOR_SPOTIFY
         self.toast_lbl.configure(text=message, fg=fg_col)
         if self.window and self.window.winfo_exists():
-            self.window.after(4000, self._hide_toast)
+            if self._toast_timer_id is not None:
+                try:
+                    self.window.after_cancel(self._toast_timer_id)
+                except Exception:
+                    pass
+            self._toast_timer_id = self.window.after(4000, self._hide_toast)
 
     def _hide_toast(self) -> None:
         """Clear inline status notification."""
+        self._toast_timer_id = None
         if self.toast_lbl:
             try:
                 self.toast_lbl.configure(text="")
@@ -1368,13 +1422,23 @@ class SettingsModal:
             logger.error("Failed to open config.json in notepad: %s", e)
 
     def _on_cancel(self) -> None:
-        """Close modal cleanly."""
+        """Close modal cleanly and cancel pending timers."""
+        self._cancel_active_capture()
         if self.window:
+            for timer_id in (self._toast_timer_id, self._close_timer_id):
+                if timer_id is not None:
+                    try:
+                        self.window.after_cancel(timer_id)
+                    except Exception:
+                        pass
+            self._toast_timer_id = None
+            self._close_timer_id = None
             self.window.destroy()
             self.window = None
 
     def _on_save(self) -> None:
         """Validate, persist to config.json, update current_config, and apply live hot reload."""
+        self._cancel_active_capture()
         try:
             dictation_val = self.var_dictation.get().strip()
             rewrite_val = self.var_rewrite.get().strip()
@@ -1382,8 +1446,27 @@ class SettingsModal:
             stt_lang = self.var_stt_language.get().strip() or "es"
             stt_model = self.var_stt_model.get().strip()
             llm_model = self.var_llm_model.get().strip()
-            max_sec = int(self.var_max_sec.get())
-            delay_ms = int(self.var_delay_ms.get())
+
+            try:
+                max_sec = int(self.var_max_sec.get())
+            except (tk.TclError, ValueError):
+                self._show_toast(
+                    "La duración máxima debe ser un número entero entre 5 y 300 segundos.",
+                    is_error=True,
+                )
+                return
+
+            if not (5 <= max_sec <= 300):
+                self._show_toast(
+                    "La duración máxima debe estar entre 5 y 300 segundos.",
+                    is_error=True,
+                )
+                return
+
+            try:
+                delay_ms = int(self.var_delay_ms.get())
+            except (tk.TclError, ValueError):
+                delay_ms = 80
 
             if not dictation_val:
                 self._show_toast("El atajo de dictado no puede estar vacío.", is_error=True)
@@ -1393,28 +1476,35 @@ class SettingsModal:
                 self._show_toast("El atajo de reescritura no puede estar vacío.", is_error=True)
                 return
 
-            engine_type = AudioEngineType.CLOUD if engine_str == "CLOUD" else AudioEngineType.LOCAL
+            if dictation_val.lower() == rewrite_val.lower():
+                self._show_toast(
+                    "Los atajos de dictado y reescritura deben ser distintos.",
+                    is_error=True,
+                )
+                return
 
-            # Groq API Key validation for CLOUD mode
-            groq_key_val = self.var_groq_api_key.get().strip()
-            is_placeholder = (
-                not groq_key_val
-                or "tu_clave" in groq_key_val.lower()
-                or "placeholder" in groq_key_val.lower()
-                or len(groq_key_val) < 20
+            engine_type = (
+                AudioEngineType.CLOUD if engine_str == "CLOUD" else AudioEngineType.LOCAL
             )
 
-            if engine_type == AudioEngineType.LOCAL and not is_placeholder:
-                # User provided a real Groq key while engine was set to LOCAL (e.g. initial setup)
-                # Automatically upgrade to CLOUD to unlock fast transcription
+            # Groq API Key validation using canonical helper
+            groq_key_val = self.var_groq_api_key.get().strip()
+            has_valid_key = is_valid_groq_api_key(groq_key_val)
+
+            if (
+                engine_type == AudioEngineType.LOCAL
+                and has_valid_key
+                and not self._had_valid_key_on_open
+            ):
+                # First-time onboarding: user entered a valid Groq key while engine defaulted to LOCAL
                 engine_type = AudioEngineType.CLOUD
                 self.var_engine.set("CLOUD")
 
-            if engine_type == AudioEngineType.CLOUD and is_placeholder:
+            if engine_type == AudioEngineType.CLOUD and not has_valid_key:
                 msg = (
-                    "Has seleccionado el motor CLOUD pero no has ingresado una clave real de Groq.\n\n"
+                    "Has seleccionado el motor CLOUD pero no has ingresado una clave válida de Groq (debe iniciar con 'gsk_').\n\n"
                     "• Haz clic en '🔑 Obtener clave gratuita...' para generar una en 1 clic.\n"
-                    "• O cambia el Motor de Audio a 'LOCAL' para dictar sin internet.\n\n"
+                    "• O cambia el motor de audio a 'LOCAL' para dictar sin internet.\n\n"
                     "¿Deseas cambiar automáticamente el motor a LOCAL para continuar?"
                 )
                 if messagebox.askyesno("Clave de Groq requerida", msg, parent=self.window):
@@ -1422,7 +1512,7 @@ class SettingsModal:
                     self.var_engine.set("LOCAL")
                 else:
                     return
-            elif engine_type == AudioEngineType.CLOUD and not is_placeholder:
+            elif engine_type == AudioEngineType.CLOUD and has_valid_key:
                 is_valid, auth_msg = verify_groq_api_key_online(groq_key_val, timeout=2.5)
                 if not is_valid:
                     warn_msg = (
@@ -1430,27 +1520,32 @@ class SettingsModal:
                         f"{auth_msg}\n\n"
                         "¿Deseas guardarla de todas formas (por ejemplo si estás sin conexión)?"
                     )
-                    if not messagebox.askyesno("Verificación de Groq", warn_msg, parent=self.window):
+                    if not messagebox.askyesno(
+                        "Verificación de Groq", warn_msg, parent=self.window
+                    ):
                         return
 
             # Validate vocabulary terms
             terms = self._get_current_terms_from_ui()
-            if len(terms) > 30:
+            if len(terms) > MAX_VOCABULARY_TERMS:
                 msg = (
                     f"Has configurado {len(terms)} términos en el vocabulario.\n\n"
-                    "Para proteger la precisión y el Word Error Rate (WER) de Whisper, el límite "
-                    "estricto es de 30 términos.\n\n"
-                    "¿Deseas guardar únicamente los primeros 30 términos y descartar los sobrantes?"
+                    f"Para proteger la precisión de Whisper, el límite estricto es de {MAX_VOCABULARY_TERMS} términos.\n\n"
+                    f"¿Deseas guardar únicamente los primeros {MAX_VOCABULARY_TERMS} términos y descartar los sobrantes?"
                 )
-                if not messagebox.askyesno("Límite de Vocabulario Excedido", msg, parent=self.window):
+                if not messagebox.askyesno(
+                    "Límite de vocabulario excedido", msg, parent=self.window
+                ):
                     return
-                terms = terms[:30]
+                terms = terms[:MAX_VOCABULARY_TERMS]
 
             # Save custom_vocabulary.json
             try:
                 with open(self.vocab_path, "w", encoding="utf-8") as f:
                     json.dump(terms, f, indent=2, ensure_ascii=False)
-                logger.info("Custom vocabulary saved with %d terms to %s", len(terms), self.vocab_path)
+                logger.info(
+                    "Custom vocabulary saved with %d terms to %s", len(terms), self.vocab_path
+                )
             except Exception as e:
                 logger.error("Failed to save vocabulary: %s", e)
 
@@ -1466,16 +1561,18 @@ class SettingsModal:
             # Update user settings and clean legacy keys
             cfg_dict.pop("hotkey_settings", None)
             cfg_dict.pop("hotkey_diagnostics", None)
-            cfg_dict.update({
-                "hotkey_dictation": dictation_val,
-                "hotkey_rewrite": rewrite_val,
-                "engine": engine_type.value,
-                "stt_language": stt_lang,
-                "groq_stt_model": stt_model,
-                "groq_llm_model": llm_model,
-                "max_recording_seconds": max_sec,
-                "clipboard_restore_delay_ms": delay_ms,
-            })
+            cfg_dict.update(
+                {
+                    "hotkey_dictation": dictation_val,
+                    "hotkey_rewrite": rewrite_val,
+                    "engine": engine_type.value,
+                    "stt_language": stt_lang,
+                    "groq_stt_model": stt_model,
+                    "groq_llm_model": llm_model,
+                    "max_recording_seconds": max_sec,
+                    "clipboard_restore_delay_ms": delay_ms,
+                }
+            )
 
             # Save config.json
             with open(self.config_path, "w", encoding="utf-8") as f:
@@ -1483,14 +1580,14 @@ class SettingsModal:
 
             logger.info("Configuration saved successfully from settings modal.")
 
-            # Persist Groq API Key securely to .env if provided and real
-            if groq_key_val and not is_placeholder:
+            # Persist Groq API Key securely to .env if provided and valid
+            if has_valid_key:
                 env_path = self.config_path.parent / ".env"
-                _persist_groq_api_key_to_env(env_path, groq_key_val)
+                persist_groq_api_key_to_env(env_path, groq_key_val)
                 os.environ["GROQ_API_KEY"] = groq_key_val
+                self._had_valid_key_on_open = True
 
             # Construct new AppConfig and update modal internal state immediately
-            from app.config import load_config
             new_config = load_config(self.config_path)
             self.current_config = new_config
 
@@ -1498,9 +1595,16 @@ class SettingsModal:
             self.on_saved(new_config)
 
             # Spotify-style non-intrusive feedback
-            self._show_toast(f"✓ Guardado: Dictado ({dictation_val}) | Reescritura ({rewrite_val})")
-            if self.window:
-                self.window.after(1100, self._on_cancel)
+            self._show_toast(
+                f"✓ Guardado: Dictado ({dictation_val}) | Reescritura ({rewrite_val})"
+            )
+            if self.window and self.window.winfo_exists():
+                if self._close_timer_id is not None:
+                    try:
+                        self.window.after_cancel(self._close_timer_id)
+                    except Exception:
+                        pass
+                self._close_timer_id = self.window.after(1100, self._on_cancel)
 
         except Exception as e:
             logger.error("Failed to save settings: %s", e)

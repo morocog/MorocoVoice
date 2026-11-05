@@ -56,15 +56,15 @@ Haz doble clic sobre el archivo **`run.bat`**.
 - Instalará todas las dependencias industriales optimizadas (`onnxruntime`, `faster-whisper`, `groq`, `pystray`, `pywin32`).
 - Inicializará **MorocoVoice** y lo dejará listo junto al reloj de Windows.
 
-### 3. Configura tu Clave de Groq (Gratuita)
+### 3. Configura tu clave de Groq (gratuita)
 1. Al arrancar por primera vez, se abrirá la ventana de **Configuración de MorocoVoice**.
 2. Haz clic en el botón **🔑 Obtener clave gratuita en console.groq.com (1 clic)** que aparece en pantalla para abrir la consola de Groq en tu navegador.
 3. Crea tu cuenta gratuita en Groq, genera tu API Key y cópiala.
-4. Pégala en el campo **Groq API Key** (se enmascara automáticamente con asteriscos `••••••••••••`).
-5. Haz clic en **💾 Guardar y Aplicar**. ¡Listo!
+4. Pégala en el campo **Clave API de Groq** (se enmascara automáticamente con asteriscos `************`).
+5. Haz clic en **💾 Guardar y aplicar**. ¡Listo!
 
-### 4. (Opcional) Enséñale tus Palabras Técnicas y Jerga
-En la pestaña **📖 Vocabulario Personalizado** dentro de Configuración:
+### 4. (Opcional) Enséñale tus palabras técnicas y jerga
+En la pestaña **📖 Vocabulario personalizado** dentro de Configuración:
 - Ingresa hasta **30 palabras técnicas, acrónimos o nombres propios** (ej: `GitHub`, `API`, `Python`, `WFM`, o nombres de tus clientes).
 - Whisper y el **corrector determinista con difflib** de MorocoVoice priorizarán estos términos para garantizar transcripciones exactas (evitando errores fonéticos como `GITCOP` en lugar de `GitHub`).
 
@@ -79,7 +79,7 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 | **`Win + Space`** *(o configurable)* | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
 
-> 💡 *Acceso rápido a Configuración: Haz **doble clic** (o clic derecho) en el icono del micrófono azul con aro dorado en la bandeja del sistema junto al reloj de Windows para abrir el panel visual o editar `config.json`.*
+> 💡 *Acceso rápido a Configuración: Haz **clic** (o **doble clic** / clic derecho) en el icono del micrófono azul con aro dorado en la bandeja del sistema junto al reloj de Windows para abrir el panel visual o editar `config.json`.*
 
 > ⚠️ **`Win + Space` es también el atajo nativo de Windows para cambiar de idioma de teclado.** MorocoVoice lo escucha sin suprimirlo, así que en equipos con más de un idioma instalado conviene cambiar el atajo de dictado por otro libre (por ejemplo `Ctrl + Shift + H`) desde la ventana de Configuración.*
 
@@ -101,7 +101,7 @@ MorocoVoice ofrece arquitectura dual según tus necesidades de conectividad o pr
 
 - **Enmascaramiento de Credenciales Anti-Shoulder Surfing:** La API Key se muestra como asteriscos en la UI y se almacena localmente en el archivo `.env`, el cual está estrictamente excluido por `.gitignore`.
 - **Logs Libres de PII (Privacy by Design):** El sistema de logging estructurado (`app/logging_setup.py`) tiene un filtro activo que **prohíbe tajantemente registrar transcripciones crudas, prompts o textos de usuario**. Solo se auditan tiempos de latencia y nombres de procesos activos.
-- **Inyección por Fases no Destructiva:** `app/platform/injector.py` utiliza `SendInput` con liberación de modificadores residuales y respaldo del contenido textual Unicode (`CF_UNICODETEXT`) del portapapeles con bloqueo reentrante (`threading.RLock`), restaurando el texto previo del usuario a los 120 ms (formatos no textuales ricos como capas gráficas u objetos OLE no se preservan por diseño de la API Win32).
+- **Inyección por fases y retención inteligente en portapapeles:** `app/platform/injector.py` utiliza `SendInput` con liberación de modificadores residuales y bloqueo reentrante (`threading.RLock`). El texto transcrito o refinado se conserva en el portapapeles Unicode (`CF_UNICODETEXT`, con `restore_clipboard=False` por omisión) para que siempre puedas pegarlo manualmente con `Ctrl + V` o desde el historial `Win + V` si cambiaste de ventana al hablar, ignorando cadenas vacías para no ensuciar `Win + V`.
 - **Compatibilidad UIPI (User Interface Privilege Isolation):** Detecta automáticamente si una ventana destino corre con permisos de Administrador para prevenir fallos silenciosos de inyección en Windows.
 
 ---
@@ -121,7 +121,7 @@ MorocoVoice/
 │   ├── logging_setup.py    # Logging sin PII + captura de errores de hilos
 │   └── main.py             # Orquestador principal y mutex de instancia única
 ├── docs/                   # Auditorías, notas de versión y TROUBLESHOOTING.md
-├── tests/                  # Suite de pruebas unitarias (57 tests)
+├── tests/                  # Suite de pruebas unitarias (63 tests)
 ├── .env.example            # Plantilla de variables de entorno
 ├── config.example.json     # Plantilla de configuración de usuario
 ├── custom_vocabulary.json  # Vocabulario especializado (jerga técnica, nombres)
@@ -178,8 +178,9 @@ y descarta todas las pulsaciones** del hook de teclado. Como la app corre con `p
 las excepciones se descartaban sin dejar rastro: parecía viva y no funcionaba.
 
 Desde la **v1.0.5** MorocoVoice detecta ese contexto al arrancar, lo explica en el log con
-el comando de solución, verifica de verdad que el teclado se captura, y garantiza el
-atajo `Ctrl + Alt + S` para que **nunca** te quedes sin acceso a Configuración.
+el comando de solución, verifica de verdad que el teclado se captura, y mantiene acceso
+directo a Configuración mediante clic o doble clic en el icono de la bandeja del sistema
+(manteniendo únicamente los 2 atajos globales oficiales: Dictado y Reescritura).
 
 ---
 

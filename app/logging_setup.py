@@ -164,7 +164,7 @@ def get_log_file_path() -> Path:
 
 
 def open_log_in_notepad() -> None:
-    """Open morocovoice.log in Notepad for live diagnostics (Ctrl+Shift+D)."""
+    """Open morocovoice.log in Notepad for live diagnostics."""
     log_path = get_log_file_path()
     if not log_path.exists():
         log_path.touch()

@@ -28,7 +28,7 @@ except Exception:
 
 from app.audio.recorder import AudioRecorder
 from app.audio.vad import VoiceActivityDetector
-from app.config import load_config
+from app.config import is_valid_groq_api_key, load_config
 from app.contracts import AppConfig, AppState
 from app.engine.engine_manager import EngineManager
 from app.llm.context import (
@@ -37,7 +37,7 @@ from app.llm.context import (
     is_current_process_elevated,
 )
 from app.llm.rewriter import SemanticRewriter
-from app.logging_setup import open_log_in_notepad, setup_logging
+from app.logging_setup import setup_logging
 from app.platform.environment import describe_restriction, get_security_context
 from app.platform.hotkey import HotkeyListener
 from app.platform.injector import emergency_restore, inject_text
@@ -103,7 +103,7 @@ class MorocoVoiceApplication:
             on_dictate_toggle=self.toggle_dictation,
             on_rewrite_trigger=self.trigger_rewrite,
             on_shutdown_trigger=self.shutdown_ordered,
-            on_diagnostics_trigger=self.trigger_diagnostics,
+            on_diagnostics_trigger=None,
             on_settings_trigger=self.open_settings,
         )
 
@@ -157,7 +157,7 @@ class MorocoVoiceApplication:
 
         # Environment gate: detect a restricted security context BEFORE the tray and
         # the hotkey hook fail silently for reasons nothing else can explain.
-        self._check_security_context()
+        is_unrestricted = self._check_security_context()
 
         # Level 1 Warm-up (blocking 2-5s if local)
         self.engine_mgr.warm_up()
@@ -170,12 +170,16 @@ class MorocoVoiceApplication:
         self.hotkeys.start()
         logger.info("MorocoVoice is live and ready.")
 
-        # Visual confirmation HUD banner on startup
-        hotkey_disp = (self.config.hotkey_dictation or "win+space").upper()
-        self.hud.show(f"MorocoVoice listo • Dictado: {hotkey_disp}", state=AppState.INJECTING)
-        self.root.after(3000, self.hud.hide)
+        # Visual confirmation HUD banner on startup (only if not showing a security warning)
+        if is_unrestricted:
+            hotkey_disp = (self.config.hotkey_dictation or "win+space").upper()
+            self.hud.show(
+                f"MorocoVoice listo • Dictado: {hotkey_disp}",
+                state=AppState.INJECTING,
+                duration_ms=3000,
+            )
 
-    def _check_security_context(self) -> None:
+    def _check_security_context(self) -> bool:
         """Warn loudly when Windows will deny the tray icon and/or the input hook.
 
         A Low-integrity process (or an AppContainer) cannot publish a tray icon
@@ -188,7 +192,7 @@ class MorocoVoiceApplication:
             context = get_security_context()
         except Exception as exc:  # pragma: no cover - must never block startup
             logger.debug("Security context check skipped: %s", exc)
-            return
+            return True
 
         logger.info(
             "Security context: integrity=%s (0x%04X), app_container=%s, elevated=%s",
@@ -198,15 +202,19 @@ class MorocoVoiceApplication:
             context.is_elevated,
         )
         if context.supports_tray_and_hooks:
-            return
+            return True
 
         app_folder = Path(__file__).resolve().parent.parent
         logger.error(describe_restriction(context, app_folder))
-        self.hud.show("Entorno restringido: ejecuta diagnostico.bat", state=AppState.ERROR)
-        self.root.after(9000, self.hud.hide)
+        self.hud.show(
+            "Entorno restringido: ejecuta diagnostico.bat",
+            state=AppState.ERROR,
+            duration_ms=9000,
+        )
+        return False
 
     def toggle_dictation(self) -> None:
-        """Toggle recording state on Alt+Space press."""
+        """Toggle recording state on configured dictation shortcut press (default Win+Space)."""
         if self._is_shutting_down:
             return
 
@@ -234,11 +242,14 @@ class MorocoVoiceApplication:
                 self.recorder.start()
             except Exception as e:
                 logger.error("Failed to start audio recording: %s", e)
-                self._dispatch_hud(AppState.ERROR, "Error de Micrófono")
-                self.root.after(2000, self.hud.hide)
+                self._dispatch_hud(
+                    AppState.ERROR,
+                    "Error de micrófono: verifica que esté conectado",
+                    duration_ms=2500,
+                )
 
     def _on_max_recording_reached(self) -> None:
-        """Callback when recording hits 60s hard limit."""
+        """Callback when recording hits configured max duration hard limit."""
         logger.info("Auto-cutoff reached (max duration limit). Stopping recording.")
         play_sound_pop()
         audio_buffer = self.recorder.stop()
@@ -246,7 +257,10 @@ class MorocoVoiceApplication:
             self.root.after(0, self.hud.hide)
             return
 
-        self._dispatch_hud(AppState.PROCESSING, "Procesando (60s límite)...")
+        self._dispatch_hud(
+            AppState.PROCESSING,
+            f"Límite de {self.config.max_recording_seconds} s alcanzado; procesando...",
+        )
         self._enqueue_processing(audio_buffer)
 
     def _on_silence_cutoff_reached(self) -> None:
@@ -278,8 +292,11 @@ class MorocoVoiceApplication:
                     transcription = self.engine_mgr.transcribe(audio_buffer)
                 except Exception as e:
                     logger.error("Transcription error in worker: %s", e)
-                    self._dispatch_hud(AppState.ERROR, "Error en Transcripción")
-                    self.root.after(2000, self.hud.hide)
+                    self._dispatch_hud(
+                        AppState.ERROR,
+                        "Error de transcripción: revisa tu conexión o clave API",
+                        duration_ms=2500,
+                    )
                     return
 
                 # Check if canceled by newer job
@@ -292,7 +309,7 @@ class MorocoVoiceApplication:
                 raw_text = transcription.text.strip()
                 if not raw_text:
                     logger.info("No speech detected or output suppressed by hallucination filter.")
-                    self.root.after(0, self.hud.hide)
+                    self._dispatch_hud(AppState.IDLE, "No se detectó voz", duration_ms=1800)
                     return
 
                 # Step 2: Contextual Semantic Refinement with graceful raw fallback
@@ -309,8 +326,7 @@ class MorocoVoiceApplication:
                     inject_text(refined_text, restore_delay_ms=self.config.clipboard_restore_delay_ms)
                 except Exception as e:
                     logger.error("Injection error: %s", e)
-                    self._dispatch_hud(AppState.ERROR, "Error al Inyectar")
-                    self.root.after(2000, self.hud.hide)
+                    self._dispatch_hud(AppState.ERROR, "No se pudo pegar el texto", duration_ms=2500)
                     return
 
                 # Complete and hide HUD
@@ -319,8 +335,7 @@ class MorocoVoiceApplication:
 
             except Exception as unhandled_e:
                 logger.error("Unhandled error in AudioWorker: %s", unhandled_e, exc_info=True)
-                self._dispatch_hud(AppState.ERROR, "Error Inesperado")
-                self.root.after(2000, self.hud.hide)
+                self._dispatch_hud(AppState.ERROR, "Error inesperado", duration_ms=2500)
 
         threading.Thread(target=_worker, daemon=True, name="AudioWorker").start()
 
@@ -341,8 +356,7 @@ class MorocoVoiceApplication:
             selected_text = get_selected_text()
             if not selected_text:
                 logger.info("No text was selected for contextual rewrite.")
-                self._dispatch_hud(AppState.ERROR, "Selecciona texto primero")
-                self.root.after(2000, self.hud.hide)
+                self._dispatch_hud(AppState.ERROR, "Selecciona texto primero", duration_ms=2000)
                 return
 
             play_sound_blip()
@@ -357,22 +371,20 @@ class MorocoVoiceApplication:
                     time.sleep(0.4)
                     self.root.after(0, self.hud.hide)
                 else:
-                    self._dispatch_hud(AppState.ERROR, "Error al Reescribir")
-                    self.root.after(2000, self.hud.hide)
+                    self._dispatch_hud(AppState.ERROR, "Error al reescribir", duration_ms=2500)
             except Exception as e:
                 logger.error("Unhandled error in RewriteWorker: %s", e, exc_info=True)
-                self._dispatch_hud(AppState.ERROR, "Error al Reescribir")
-                self.root.after(2000, self.hud.hide)
+                self._dispatch_hud(AppState.ERROR, "Error al reescribir", duration_ms=2500)
 
         threading.Thread(target=_rewrite_pipeline, daemon=True, name="RewritePipeline").start()
 
-    def trigger_diagnostics(self) -> None:
-        """Open log file in Notepad (Ctrl+Shift+D)."""
-        open_log_in_notepad()
-
-    def _dispatch_hud(self, state: AppState, text: str) -> None:
+    def _dispatch_hud(
+        self, state: AppState, text: str, duration_ms: int | None = None
+    ) -> None:
         """Thread-safe HUD update routed to Tkinter main thread."""
-        self.root.after(0, lambda: self.hud.show(text=text, state=state))
+        self.root.after(
+            0, lambda: self.hud.show(text=text, state=state, duration_ms=duration_ms)
+        )
 
     def _dispatch_uipi_alert(self) -> None:
         """Thread-safe UIPI alert display."""
@@ -435,8 +447,6 @@ def main() -> None:
 
     app.start()
     # Show settings modal on first run if no valid API key is configured
-    from app.config import is_valid_groq_api_key
-
     if not is_valid_groq_api_key(config.groq_api_key):
         app.open_settings()
     try:
