@@ -16,6 +16,10 @@ import tkinter as tk
 from ctypes import wintypes
 from pathlib import Path
 
+_ROOT = Path(__file__).resolve().parent.parent
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
 # CRITICAL DPI AWARENESS: Must execute before any Tkinter / UI imports
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)

@@ -209,6 +209,10 @@ class HotkeyListener:
             logger.warning("Could not run the keyboard capture self-test: %s", exc)
             return
 
+        if not tapped:
+            logger.debug("Keyboard capture self-test skipped: SendInput not available in current session/focus.")
+            return
+
         deadline = time.perf_counter() + 1.0
         while time.perf_counter() < deadline:
             if self._event_count > baseline:

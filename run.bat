@@ -19,34 +19,36 @@ echo [*] Verificando instalador de Python 3.11+ en el sistema...
 
 set "PY_CMD="
 python --version >nul 2>&1
+if errorlevel 1 goto :CHECK_PY_LAUNCHER
+python -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
 if not errorlevel 1 (
-    python -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
-    if not errorlevel 1 set "PY_CMD=python"
+    set "PY_CMD=python"
+    goto :CREATE_VENV
 )
 
-if not defined PY_CMD (
-    py -3.11 --version >nul 2>&1
-    if not errorlevel 1 set "PY_CMD=py -3.11"
+:CHECK_PY_LAUNCHER
+py -3.11 --version >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=py -3.11"
+    goto :CREATE_VENV
 )
 
-if not defined PY_CMD (
-    py -3 --version >nul 2>&1
-    if not errorlevel 1 (
-        py -3 -c "import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)" >nul 2>&1
-        if not errorlevel 1 set "PY_CMD=py -3"
-    )
+py -3 --version >nul 2>&1
+if errorlevel 1 goto :NO_PY
+py -3 -c "import sys; sys.exit(0 if sys.hexversion >= 0x030B0000 else 1)" >nul 2>&1
+if not errorlevel 1 (
+    set "PY_CMD=py -3"
+    goto :CREATE_VENV
 )
 
-if not defined PY_CMD (
-    echo [ERROR] No se detecto una instalacion valida de Python 3.11 o superior.
-    echo MorocoVoice requiere Python 3.11+ (con soporte StrEnum y tipado moderno).
-    echo Por favor descarga e instala Python 3.11 o superior desde:
-    echo   https://www.python.org/downloads/
-    echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalacion.
-    echo.
-    pause
-    exit /b 1
-)
+:NO_PY
+echo [ERROR] No se detecto una instalacion valida de Python 3.11 o superior.
+echo MorocoVoice requiere Python 3.11+ con soporte StrEnum y tipado moderno.
+echo Por favor descarga e instala Python 3.11 o superior desde https://www.python.org/downloads/
+echo IMPORTANTE: Marca la casilla "Add Python to PATH" durante la instalacion.
+echo.
+pause
+exit /b 1
 
 :CREATE_VENV
 echo [*] Creando entorno virtual aislado (.venv) con %PY_CMD%...
@@ -134,5 +136,5 @@ echo * Atajo de Dictado: Win + Space
 echo * Atajo de Reescritura: Ctrl + Shift + Space
 echo.
 
-start "" ".venv\Scripts\pythonw.exe" -m app.main
+start "" /d "%~dp0" "%~dp0.venv\Scripts\pythonw.exe" -m app.main
 exit /b 0
