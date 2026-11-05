@@ -82,10 +82,7 @@ class AppConfig:
     hotkey_rewrite: str = "ctrl+shift+space"
     hotkey_shutdown: str = ""
     hotkey_diagnostics: str = ""
-    #: Guaranteed keyboard route into the Settings window. Published by default so
-    #: a user is never locked out when the tray icon cannot be created (restricted
-    #: environments deny Shell_NotifyIcon, and Windows 11 parks new icons in the
-    #: overflow flyout instead of the taskbar corner).
+    #: Guaranteed keyboard route into the Settings window.
     hotkey_settings: str = "ctrl+alt+s"
     engine: AudioEngineType = AudioEngineType.CLOUD
     groq_api_key: str = ""

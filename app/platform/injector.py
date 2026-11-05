@@ -132,6 +132,9 @@ def get_clipboard_text() -> str:
 
 def set_clipboard_text(text: str) -> bool:
     """Set text content into clipboard with retry loop and 64-bit safety."""
+    if not text:
+        # Avoid setting empty string which creates blank ghost items in Windows Clipboard History (Win+V)
+        return True
     if _HAS_PYWIN32_CLIP:
         for _ in range(6):
             try:
@@ -284,8 +287,8 @@ def emergency_restore() -> None:
         if _active_backup_text is not None:
             try:
                 curr = get_clipboard_text()
-                # Only restore if clipboard still holds our injected text
-                if curr == _injected_expected_text:
+                # Only restore if clipboard still holds our injected text and backup was non-empty
+                if curr == _injected_expected_text and _active_backup_text.strip():
                     set_clipboard_text(_active_backup_text)
                     logger.info("Emergency clipboard restoration completed.")
             except Exception as e:
@@ -299,33 +302,45 @@ def emergency_restore() -> None:
 atexit.register(emergency_restore)
 
 
-def inject_text(text: str, restore_delay_ms: int = 80) -> bool:
-    """Safely inject text into active control via SendInput and guarded clipboard."""
+def inject_text(text: str, restore_clipboard: bool = False, restore_delay_ms: int = 80) -> bool:
+    """Safely inject text into active control via SendInput and clipboard.
+
+    By default (restore_clipboard=False), the injected text REMAINS in the clipboard.
+    This guarantees:
+    1. Zero loss of dictated/rewritten text: If focus was lost or no text field was active,
+       the user can simply press Ctrl+V anywhere to paste what they spoke.
+    2. Zero blank history pollution: In Windows Clipboard History (Win+V), the transcribed
+       text is pinned at the top, without creating a phantom blank entry.
+    """
     global _active_backup_text, _injected_expected_text
 
     if not text:
         return True
 
     with _clipboard_lock:
-        # Step 1: Backup current user clipboard
-        backup_text = get_clipboard_text()
-        _active_backup_text = backup_text
+        if restore_clipboard:
+            backup_text = get_clipboard_text()
+            _active_backup_text = backup_text
         _injected_expected_text = text
 
         try:
-            # Step 2: Write injected payload
+            # Step 1: Write injected payload into clipboard
             if not set_clipboard_text(text):
                 raise InjectionError("Failed to set clipboard text before injection.")
 
-            # Step 3: Trigger Ctrl+V
+            # Step 2: Trigger Ctrl+V
             send_ctrl_v()
 
         except Exception as e:
             logger.error("Injection failed: %s", e)
-            emergency_restore()
+            if restore_clipboard:
+                emergency_restore()
             raise InjectionError(f"Injection transaction error: {e}") from e
 
-    # Step 4: Non-blocking asynchronous clipboard restore with external manager verification
+    if not restore_clipboard:
+        return True
+
+    # Step 3: Non-blocking asynchronous clipboard restore (only when restore_clipboard=True)
     def _async_restore() -> None:
         global _active_backup_text, _injected_expected_text
         time.sleep(restore_delay_ms / 1000.0)
@@ -339,8 +354,8 @@ def inject_text(text: str, restore_delay_ms: int = 80) -> bool:
                     )
                     return
 
-                # Restore previous text
-                if _active_backup_text is not None:
+                # Only restore if previous text was non-empty to avoid blank entries in Win+V
+                if _active_backup_text and _active_backup_text.strip():
                     set_clipboard_text(_active_backup_text)
             except Exception as exc:
                 logger.error("Error during asynchronous clipboard restoration: %s", exc)

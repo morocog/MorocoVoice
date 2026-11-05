@@ -98,3 +98,25 @@ def test_send_ctrl_v_executes_safely():
         assert mock_send_input.call_count >= 3
 
 
+
+
+def test_set_clipboard_empty_string_is_noop():
+    """Verify that attempting to set an empty string does not corrupt clipboard or add blank history entries."""
+    assert set_clipboard_text("") is True
+
+
+def test_inject_text_retains_payload_in_clipboard_by_default():
+    """Verify that inject_text preserves the injected text in clipboard so the user never loses speech output."""
+    from unittest.mock import patch
+    from app.platform.injector import inject_text
+
+    original = get_clipboard_text()
+    try:
+        with patch("app.platform.injector.send_ctrl_v"):
+            success = inject_text("Texto Dictado Permanente")
+            if not success:
+                pytest.skip("Clipboard unavailable.")
+            assert get_clipboard_text() == "Texto Dictado Permanente"
+    finally:
+        if original:
+            set_clipboard_text(original)

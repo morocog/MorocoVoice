@@ -132,7 +132,6 @@ REM 4. Arranque en Pantalla y Segundo Plano
 echo * Lanzando MorocoVoice...
 echo * Atajo de Dictado: Win + Space
 echo * Atajo de Reescritura: Ctrl + Shift + Space
-echo * Atajo de Configuracion: Ctrl + Alt + S  (util si el icono no aparece)
 echo.
 
 start "" ".venv\Scripts\pythonw.exe" -m app.main

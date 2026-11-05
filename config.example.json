@@ -1,8 +1,6 @@
 {
   "hotkey_dictation": "win+space",
   "hotkey_rewrite": "ctrl+shift+space",
-  "hotkey_settings": "ctrl+alt+s",
-  "hotkey_diagnostics": "ctrl+shift+d",
   "engine": "CLOUD",
   "groq_stt_model": "whisper-large-v3",
   "groq_llm_model": "qwen/qwen3.8-27b",
@@ -11,7 +9,6 @@
   "ollama_url": "http://localhost:11434",
   "ollama_model": "qwen2.5:1.5b",
   "max_recording_seconds": 60,
-  "clipboard_restore_delay_ms": 80,
   "sample_rate": 16000,
   "hud_bottom_margin_px": 60,
   "custom_vocabulary_path": "custom_vocabulary.json",
