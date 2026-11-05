@@ -92,8 +92,8 @@ def _instrument_pystray() -> None:
             logger.error(
                 "Shell_NotifyIcon(NIM_ADD) FAILED (%s). Windows rejected the tray "
                 "icon, so it will NOT appear in the notification area. Dictation "
-                "still works; use the Settings hotkey (default ctrl+alt+s) instead "
-                "of the tray menu. If the notification area is simply hiding the "
+                "still works; run diagnostico.bat to open Settings or view logs. "
+                "If the notification area is simply hiding the "
                 "icon, enable it in Configuracion > Personalizacion > Barra de "
                 "tareas > Otros iconos. See docs/TROUBLESHOOTING.md.",
                 detail,

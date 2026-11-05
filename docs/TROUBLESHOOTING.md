@@ -167,17 +167,13 @@ Shell_NotifyIcon(NIM_ADD) FAILED ([WinError 5] Acceso denegado.)
 
 Eso es el caso de la [sección 1](#1-el-icono-no-aparece-y-ningún-atajo-funciona-integridad-low).
 
-### Tranquilidad: ya no te quedas encerrado
+### Acceso Garantizado a Configuración y Diagnóstico
 
-Aunque el icono falle, **siempre** tienes una vía de teclado a Configuración:
+Para evitar colisiones de teclado globales y proteger la ergonomía del sistema operativo, MorocoVoice mantiene estrictamente **dos atajos de teclado oficiales** (Dictado y Reescritura).
 
-| Atajo | Función | Por defecto |
-| :--- | :--- | :--- |
-| Abrir Configuración | Abre esta ventana sin tocar la bandeja | `Ctrl + Alt + S` |
-| Diagnóstico (Logs) | Abre `morocovoice.log` en Notepad | `Ctrl + Shift + D` |
-
-Ambos se pueden cambiar dentro de la propia ventana de Configuración. El atajo de
-Configuración **no puede quedar vacío** por diseño: es la red de seguridad.
+El acceso a las opciones del sistema se realiza de forma directa mediante:
+- **Doble clic** en el icono del micrófono en la bandeja del sistema (o clic derecho → Configuración).
+- O ejecutando el asistente **`diagnostico.bat`** en la raíz del proyecto para abrir la configuración o inspeccionar `morocovoice.log` sin necesidad de atajos de teclado adicionales.
 
 ---
 
@@ -195,7 +191,7 @@ dictar.
 `Ctrl + Alt + Space`, `Ctrl + Shift + D`… o cualquier combinación libre.
 
 - Desde la UI: clic derecho en el icono → **⚙️ Configuración…** → *Dictado Inteligente*.
-- O desde el teclado: `Ctrl + Alt + S`.
+- O ejecutando `diagnostico.bat`.
 - O editando `config.json`:
 
 ```json

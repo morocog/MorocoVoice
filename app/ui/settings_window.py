@@ -1285,6 +1285,12 @@ class SettingsModal:
                 or len(groq_key_val) < 20
             )
 
+            if engine_type == AudioEngineType.LOCAL and not is_placeholder:
+                # User provided a real Groq key while engine was set to LOCAL (e.g. initial setup)
+                # Automatically upgrade to CLOUD to unlock fast transcription
+                engine_type = AudioEngineType.CLOUD
+                self.var_engine.set("CLOUD")
+
             if engine_type == AudioEngineType.CLOUD and is_placeholder:
                 msg = (
                     "Has seleccionado el motor CLOUD pero no has ingresado una clave real de Groq.\n\n"

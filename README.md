@@ -79,7 +79,7 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 | **`Win + Space`** *(o configurable)* | **Dictado Inteligente** | Presiona para comenzar a hablar. Una cápsula flotante (HUD) translúcida te indicará `Escuchando...`. Vuelve a presionar al terminar y tu texto será transcrito e inyectado en la aplicación activa. |
 | **`Ctrl + Shift + Space`** | **Reescritura Contextual** | Selecciona cualquier texto crudo o informal con el ratón o teclado. Presiona el atajo y MorocoVoice detectará si estás en Outlook, Slack, Teams o VS Code para redactar una versión profesional y reemplazar la selección. |
 
-> 💡 *Acceso rápido a Configuración: Haz **doble clic** (o clic derecho) en el icono de la pluma en la bandeja del sistema junto al reloj de Windows para abrir el panel visual o editar `config.json`.*
+> 💡 *Acceso rápido a Configuración: Haz **doble clic** (o clic derecho) en el icono del micrófono azul con aro dorado en la bandeja del sistema junto al reloj de Windows para abrir el panel visual o editar `config.json`.*
 
 > ⚠️ **`Win + Space` es también el atajo nativo de Windows para cambiar de idioma de teclado.** MorocoVoice lo escucha sin suprimirlo, así que en equipos con más de un idioma instalado conviene cambiar el atajo de dictado por otro libre (por ejemplo `Ctrl + Shift + H`) desde la ventana de Configuración.*
 
@@ -89,7 +89,7 @@ Diseñados con ergonomía y protección contra conflictos en teclados latinoamer
 MorocoVoice ofrece arquitectura dual según tus necesidades de conectividad o privacidad:
 
 1. **Modo Cloud (Recomendado - Paridad Wispr Flow):**
-   - Transcripción con `whisper-large-v3-turbo` en Groq Cloud (~400 ms de latencia API).
+   - Transcripción con `whisper-large-v3` en Groq Cloud (~400 ms de latencia API).
    - Reescritura semántica contextual ultrarrápida con `qwen/qwen3.8-27b`.
 2. **Modo Local Offline (Privacidad Absoluta):**
    - Inferencia de voz local en CPU utilizando `faster-whisper` (cuantización `int8`, motor CTranslate2 optimizado con AVX2/AVX512).
@@ -121,7 +121,7 @@ MorocoVoice/
 │   ├── logging_setup.py    # Logging sin PII + captura de errores de hilos
 │   └── main.py             # Orquestador principal y mutex de instancia única
 ├── docs/                   # Auditorías, notas de versión y TROUBLESHOOTING.md
-├── tests/                  # Suite de pruebas unitarias (43 tests)
+├── tests/                  # Suite de pruebas unitarias (57 tests)
 ├── .env.example            # Plantilla de variables de entorno
 ├── config.example.json     # Plantilla de configuración de usuario
 ├── custom_vocabulary.json  # Vocabulario especializado (jerga técnica, nombres)

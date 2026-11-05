@@ -135,9 +135,13 @@ class MorocoVoiceApplication:
     def enforce_single_instance(self) -> bool:
         """Enforce single instance execution via Win32 Named Mutex."""
         # VERIFY: CreateMutexW to prevent duplicate overlapping instances
+        # Try Global namespace first, then fall back to Local namespace if restricted
         handle = ctypes.windll.kernel32.CreateMutexW(None, True, MUTEX_NAME)
         if not handle:
-            logger.error("Failed to create Win32 named mutex (handle is NULL).")
+            local_name = r"Local\MorocoVoice_SingleInstance_Mutex"
+            handle = ctypes.windll.kernel32.CreateMutexW(None, True, local_name)
+        if not handle:
+            logger.error("Failed to create Win32 named mutex in Global and Local namespaces.")
             return False
         last_err = ctypes.windll.kernel32.GetLastError()
         if last_err == ERROR_ALREADY_EXISTS:

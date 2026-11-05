@@ -158,10 +158,21 @@ class EngineManager:
         )
 
     def warm_up(self) -> None:
-        """Level 1 Warm-up: Load local Whisper weights if in local mode."""
+        """Level 1 Warm-up: Load local Whisper weights (synchronously in LOCAL, or in background for CLOUD fallback)."""
         if self.active_engine == AudioEngineType.LOCAL or not self.config.groq_api_key:
             logger.info("Initiating Level 1 warm-up for local Whisper model...")
             self.local_engine.initialize()
+        else:
+            # Pre-warm local engine in background thread so offline fallback doesn't stall worker
+            import threading
+            threading.Thread(target=self._background_warm_local, daemon=True).start()
+
+    def _background_warm_local(self) -> None:
+        try:
+            logger.debug("Background pre-warming local Whisper model for fallback...")
+            self.local_engine.initialize()
+        except Exception as exc:
+            logger.debug("Background local engine pre-warm skipped or offline: %s", exc)
 
     def transcribe(self, audio_data: np.ndarray) -> TranscriptionResult:
         """Transcribe audio with cloud-first policy, automatic local fallback, and deterministic vocabulary post-processing."""

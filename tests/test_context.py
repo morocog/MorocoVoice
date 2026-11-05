@@ -52,3 +52,12 @@ def test_get_selected_text_returns_content_on_sequence_change():
          patch("app.llm.context.get_clipboard_text", return_value="Selected text payload"):
         result = get_selected_text()
         assert result == "Selected text payload"
+
+
+def test_is_process_elevated_returns_true_on_access_denied():
+    """Verify is_process_elevated returns True when OpenProcessToken fails with ERROR_ACCESS_DENIED (5)."""
+    with patch("ctypes.windll.kernel32.OpenProcess", return_value=1234), \
+         patch("ctypes.windll.advapi32.OpenProcessToken", return_value=0), \
+         patch("ctypes.GetLastError", return_value=5), \
+         patch("ctypes.windll.kernel32.CloseHandle"):
+        assert is_process_elevated(9999) is True

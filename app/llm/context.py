@@ -44,6 +44,10 @@ def is_process_elevated(pid: int) -> bool:
     h_token = wintypes.HANDLE()
     try:
         if not ctypes.windll.advapi32.OpenProcessToken(h_process, TOKEN_QUERY, ctypes.byref(h_token)):
+            err = ctypes.GetLastError()
+            # ERROR_ACCESS_DENIED (5) indicates the target process token is elevated higher than caller
+            if err == 5:
+                return True
             return False
 
         elevation = TOKEN_ELEVATION()

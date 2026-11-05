@@ -12,7 +12,7 @@ echo ======================================================
 echo.
 
 REM 1. Verificacion y Creacion Automatica del Entorno Virtual (Zero-Touch)
-if exist ".venv\Scripts\python.exe" goto :RUN_APP
+if exist ".venv\Scripts\python.exe" if exist ".venv\.installed" goto :RUN_APP
 
 echo [*] Primer inicio detectado: Configurando entorno para MorocoVoice...
 echo [*] Verificando instalador de Python 3.11+ en el sistema...
@@ -68,6 +68,7 @@ if errorlevel 1 (
     pause
     exit /b 1
 )
+echo installed > ".venv\.installed"
 
 if not exist ".env" (
     if exist ".env.example" (
@@ -128,7 +129,7 @@ REM    ...\Programs\Python\Python311\pythonw.exe y NO contiene "MorocoVoice"
 REM    en su ruta, por lo que un filtro por ruta dejaba huerfanos vivos.
 REM    Se filtra por linea de comandos (app.main) para cerrar AMBOS.
 echo * Verificando y cerrando instancias previas de MorocoVoice...
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 600" >nul 2>&1
+powershell -NoProfile -Command "$root = (Get-Item '%~dp0').FullName.TrimEnd('\'); Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'python*' -and $_.CommandLine -like '*app.main*' -and $_.CommandLine -like ('*' + $root + '*') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Sleep -Milliseconds 600" >nul 2>&1
 
 REM 4. Arranque en Pantalla y Segundo Plano
 echo * Lanzando MorocoVoice en segundo plano...
