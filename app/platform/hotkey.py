@@ -21,6 +21,48 @@ logger = get_logger("hotkey")
 #: character, fires no shortcut and changes no state, yet travels the full input path.
 VK_SHIFT = 0x10
 
+KEY_ALIASES: dict[str, str] = {
+    "espacio": "space",
+    "barra": "space",
+    "spacebar": "space",
+    "intro": "enter",
+    "return": "enter",
+    "escape": "esc",
+    "supr": "delete",
+    "del": "delete",
+}
+
+
+def extract_key_name(key: keyboard.Key | keyboard.KeyCode) -> str:
+    """Extract canonical lowercase string representation of a key.
+
+    Handles Windows ASCII control characters when Ctrl is pressed (e.g. Ctrl+S -> 0x13,
+    Ctrl+H -> 0x08), Virtual Key (VK) codes for alphanumeric and function keys, and Key enum names.
+    """
+    if isinstance(key, keyboard.Key):
+        return key.name.lower()
+    if isinstance(key, keyboard.KeyCode):
+        if key.char:
+            c = key.char
+            # On Windows, Ctrl+A .. Ctrl+Z produce ASCII control codes 1..26 (\x01 - \x1a)
+            if 1 <= ord(c) <= 26:
+                return chr(ord(c) + 96).lower()
+            return c.lower()
+        if key.vk:
+            # 65-90: A-Z
+            if 65 <= key.vk <= 90:
+                return chr(key.vk).lower()
+            # 48-57: 0-9
+            if 48 <= key.vk <= 57:
+                return chr(key.vk)
+            # 96-105: Numpad 0-9
+            if 96 <= key.vk <= 105:
+                return chr(key.vk - 48)
+            # 112-123: F1-F12
+            if 112 <= key.vk <= 123:
+                return f"f{key.vk - 111}"
+    return ""
+
 
 @dataclass(frozen=True)
 class ParsedHotkey:
@@ -35,10 +77,10 @@ class ParsedHotkey:
     def matches(self, active_keys: set[keyboard.Key | keyboard.KeyCode], pressed_key: keyboard.Key | keyboard.KeyCode) -> bool:
         """Evaluate if the currently active keys satisfy this hotkey combination."""
         # Modifiers check
-        has_ctrl = keyboard.Key.ctrl in active_keys
-        has_alt = keyboard.Key.alt in active_keys
-        has_shift = keyboard.Key.shift in active_keys
-        has_win = keyboard.Key.cmd in active_keys
+        has_ctrl = any(k in active_keys for k in (keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r))
+        has_alt = any(k in active_keys for k in (keyboard.Key.alt, keyboard.Key.alt_l, keyboard.Key.alt_r, keyboard.Key.alt_gr))
+        has_shift = any(k in active_keys for k in (keyboard.Key.shift, keyboard.Key.shift_l, keyboard.Key.shift_r))
+        has_win = any(k in active_keys for k in (keyboard.Key.cmd, keyboard.Key.cmd_l, keyboard.Key.cmd_r))
 
         if self.ctrl != has_ctrl:
             return False
@@ -50,12 +92,7 @@ class ParsedHotkey:
             return False
 
         # Target key check
-        pressed_name = ""
-        if isinstance(pressed_key, keyboard.Key):
-            pressed_name = pressed_key.name.lower()
-        elif isinstance(pressed_key, keyboard.KeyCode):
-            pressed_name = (pressed_key.char or "").lower()
-
+        pressed_name = extract_key_name(pressed_key)
         return pressed_name == self.key_name.lower()
 
 
@@ -85,6 +122,8 @@ def parse_hotkey_string(hotkey_str: str) -> ParsedHotkey | None:
 
     if not main_key:
         return None
+
+    main_key = KEY_ALIASES.get(main_key, main_key)
 
     return ParsedHotkey(
         raw_str=hotkey_str,
@@ -322,3 +361,8 @@ class HotkeyListener:
         with self._lock:
             self._current_keys.discard(norm_key)
             self._current_keys.discard(raw_key)
+            if isinstance(raw_key, keyboard.KeyCode) and raw_key.vk:
+                self._current_keys = {
+                    k for k in self._current_keys
+                    if not (isinstance(k, keyboard.KeyCode) and k.vk == raw_key.vk)
+                }

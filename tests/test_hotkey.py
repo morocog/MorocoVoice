@@ -82,3 +82,48 @@ def test_empty_settings_hotkey_is_disabled_and_harmless():
     listener._on_press(keyboard.Key.alt_l)
     listener._on_press(keyboard.KeyCode.from_char("s"))
     assert listener._hk_settings is None
+
+
+def test_windows_ctrl_letter_control_characters():
+    """Ensure Windows ASCII control chars (e.g. Ctrl+S -> 0x13, Ctrl+H -> 0x08) match properly."""
+    # Test ctrl+s
+    hk_s = parse_hotkey_string("ctrl+s")
+    assert hk_s is not None
+    # KeyCode with char='\x13' and vk=83 (as emitted by Windows WH_KEYBOARD_LL under Ctrl)
+    key_ctrl_s = keyboard.KeyCode(char="\x13", vk=83)
+    assert hk_s.matches({keyboard.Key.ctrl}, key_ctrl_s) is True
+
+    # Test ctrl+h
+    hk_h = parse_hotkey_string("ctrl+h")
+    assert hk_h is not None
+    key_ctrl_h = keyboard.KeyCode(char="\x08", vk=72)
+    assert hk_h.matches({keyboard.Key.ctrl}, key_ctrl_h) is True
+
+    # Test key with no char but valid vk (e.g. F8 or numpad)
+    key_vk_only = keyboard.KeyCode(char=None, vk=83)  # 's' by vk
+    assert hk_s.matches({keyboard.Key.ctrl}, key_vk_only) is True
+
+
+def test_spanish_aliases_parsed():
+    """Ensure Spanish aliases like 'espacio' parse to 'space'."""
+    hk = parse_hotkey_string("win+espacio")
+    assert hk is not None
+    assert hk.key_name == "space"
+    assert hk.win is True
+
+
+def test_live_listener_triggers_with_windows_ctrl_s():
+    """Verify live HotkeyListener triggers dictation when Windows sends Ctrl+S with ASCII 0x13."""
+    fired = threading.Event()
+    listener = HotkeyListener(
+        hotkey_dictation="ctrl+s",
+        on_dictate_toggle=fired.set,
+    )
+    listener._is_running = True
+
+    listener._on_press(keyboard.Key.ctrl_l)
+    assert not fired.is_set()
+
+    # Windows emits char='\x13' (Device Control 3) for Ctrl+S
+    listener._on_press(keyboard.KeyCode(char="\x13", vk=83))
+    assert fired.wait(timeout=2.0) is True
