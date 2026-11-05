@@ -136,5 +136,5 @@ echo * Atajo de Dictado: Win + Space
 echo * Atajo de Reescritura: Ctrl + Shift + Space
 echo.
 
-start "" /d "%~dp0" "%~dp0.venv\Scripts\pythonw.exe" -m app.main
+start "" ".venv\Scripts\pythonw.exe" -m app.main
 exit /b 0
