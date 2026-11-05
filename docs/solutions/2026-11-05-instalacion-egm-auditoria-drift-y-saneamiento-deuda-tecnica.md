@@ -62,3 +62,4 @@ Al ejecutar el protocolo de detección de divergencias (`egm-drift-report`) sobr
 3. **Depuración de `config.json` y `settings_window.py`:** Se eliminaron las claves residuales de `config.json` y se protegió `_on_save` con `cfg_dict.pop(...)` para evitar reintroducirlas.
 4. **Verificación Automatizada:** Se ejecutó la suite completa de 57 pruebas unitarias con `pytest`, pasando al 100% en 5.27 segundos.
 5. **Gobernanza de Relevo:** Se emitió la encomienda técnica para ejecutar `sync.cmd pull` y homologar las dependencias faltantes entre la estación de casa (`moroc`) y la oficina (`SDVP`).
+
