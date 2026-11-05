@@ -171,8 +171,9 @@ class MorocoVoiceApplication:
         logger.info("MorocoVoice is live and ready.")
 
         # Visual confirmation HUD banner on startup
-        self.hud.show(f"MorocoVoice Activo ({self.config.hotkey_dictation})", state=AppState.INJECTING)
-        self.root.after(2500, self.hud.hide)
+        hotkey_disp = (self.config.hotkey_dictation or "win+space").upper()
+        self.hud.show(f"MorocoVoice listo • Dictado: {hotkey_disp}", state=AppState.INJECTING)
+        self.root.after(3000, self.hud.hide)
 
     def _check_security_context(self) -> None:
         """Warn loudly when Windows will deny the tray icon and/or the input hook.

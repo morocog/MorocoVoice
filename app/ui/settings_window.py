@@ -1,8 +1,8 @@
 """Visual settings modal window for MorocoVoice.
 
 Spotify-inspired dark theme UI with a wide 2-column layout (zero unnecessary scroll),
-modern keycap chips, interactive shortcut recorder, dark ttk selectors, direct synchronization to config.json,
-and crash-proof in-dock status notifications.
+interactive keycap chips with spacious non-clipping controls, Canvas-drawn pill buttons,
+dark ttk selectors, direct synchronization to config.json, and crash-proof in-dock notifications.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ import json
 import os
 import subprocess
 import tkinter as tk
+import tkinter.font as tkfont
 import webbrowser
 from collections.abc import Callable
 from pathlib import Path
@@ -39,7 +40,7 @@ COLOR_TEXT_HINT = "#727272"     # Captions and placeholders
 COLOR_DANGER = "#F15E6C"        # Error state
 COLOR_GOLD = "#FECA66"          # Telat accent
 COLOR_CHIP_BG = "#282828"       # Keycap chip background
-COLOR_CHIP_BORDER = "#3A3A3A"   # Keycap chip border
+COLOR_CHIP_BORDER = "#3E3E3E"   # Keycap chip border
 
 RECOMMENDED_VOCABULARY: list[str] = [
     "GitHub",
@@ -73,6 +74,133 @@ RECOMMENDED_VOCABULARY: list[str] = [
     "MorocoVoice",
     "Backend",
 ]
+
+
+class PillButton(tk.Canvas):
+    """Authentic Spotify-styled pill button drawn natively on Canvas with smooth hover transitions."""
+
+    def __init__(
+        self,
+        parent: tk.Widget,
+        text: str,
+        command: Callable[[], None] | None = None,
+        bg_color: str = COLOR_SPOTIFY,
+        fg_color: str = "#000000",
+        hover_bg: str = COLOR_SPOTIFY_HOVER,
+        hover_fg: str = "#000000",
+        border_color: str | None = None,
+        font: tuple = ("Segoe UI", 9, "bold"),
+        padx: int = 22,
+        pady: int = 7,
+        canvas_bg: str = COLOR_PANEL,
+        **kwargs,
+    ) -> None:
+        self.text_str = text
+        self.command = command
+        self.bg_color = bg_color
+        self.fg_color = fg_color
+        self.hover_bg = hover_bg
+        self.hover_fg = hover_fg
+        self.border_color = border_color
+        self.fnt = font
+        self.padx = padx
+        self.pady = pady
+        self.canvas_bg = canvas_bg
+
+        # Measure text width safely
+        fnt_family = font[0]
+        fnt_size = font[1]
+        fnt_weight = font[2] if len(font) > 2 else "normal"
+        try:
+            tk_fnt = tkfont.Font(family=fnt_family, size=fnt_size, weight=fnt_weight)
+            text_w = tk_fnt.measure(text)
+            text_h = tk_fnt.metrics("linespace")
+        except Exception:
+            text_w = len(text) * 8
+            text_h = 16
+
+        self.w = max(40, text_w + padx * 2)
+        self.h = max(24, text_h + pady * 2)
+
+        super().__init__(
+            parent,
+            width=self.w,
+            height=self.h,
+            bg=canvas_bg,
+            highlightthickness=0,
+            cursor="hand2",
+            **kwargs,
+        )
+
+        self.draw(self.bg_color, self.fg_color)
+        self.bind("<Enter>", lambda e: self.draw(self.hover_bg, self.hover_fg))
+        self.bind("<Leave>", lambda e: self.draw(self.bg_color, self.fg_color))
+        self.bind("<Button-1>", lambda e: self._on_click())
+
+    def draw(self, bg_col: str, fg_col: str) -> None:
+        """Render rounded pill capsule geometry and centered label."""
+        self.delete("all")
+        r = self.h // 2
+        w, h = self.w, self.h
+        if self.border_color:
+            # Outer border pill
+            self.create_arc(0, 0, 2 * r, 2 * r, start=90, extent=180, fill=self.border_color, outline="")
+            self.create_arc(w - 2 * r, 0, w, 2 * r, start=270, extent=180, fill=self.border_color, outline="")
+            self.create_rectangle(r, 0, w - r, h, fill=self.border_color, outline="")
+            # Inner body pill
+            self.create_arc(1, 1, 2 * r - 1, 2 * r - 1, start=90, extent=180, fill=bg_col, outline="")
+            self.create_arc(w - 2 * r + 1, 1, w - 1, 2 * r - 1, start=270, extent=180, fill=bg_col, outline="")
+            self.create_rectangle(r, 1, w - r, h - 1, fill=bg_col, outline="")
+        else:
+            self.create_arc(0, 0, 2 * r, 2 * r, start=90, extent=180, fill=bg_col, outline="")
+            self.create_arc(w - 2 * r, 0, w, 2 * r, start=270, extent=180, fill=bg_col, outline="")
+            self.create_rectangle(r, 0, w - r, h, fill=bg_col, outline="")
+        self.create_text(w // 2, h // 2, text=self.text_str, fill=fg_col, font=self.fnt)
+
+    def set_text(self, text: str, bg_color: str | None = None, fg_color: str | None = None) -> None:
+        """Update button text and recalculate capsule width smoothly."""
+        self.text_str = text
+        if bg_color:
+            self.bg_color = bg_color
+        if fg_color:
+            self.fg_color = fg_color
+
+        fnt_family = self.fnt[0]
+        fnt_size = self.fnt[1]
+        fnt_weight = self.fnt[2] if len(self.fnt) > 2 else "normal"
+        try:
+            tk_fnt = tkfont.Font(family=fnt_family, size=fnt_size, weight=fnt_weight)
+            text_w = tk_fnt.measure(text)
+            text_h = tk_fnt.metrics("linespace")
+        except Exception:
+            text_w = len(text) * 8
+            text_h = 16
+        self.w = max(40, text_w + self.padx * 2)
+        self.h = max(24, text_h + self.pady * 2)
+        self.configure(width=self.w, height=self.h)
+        self.draw(self.bg_color, self.fg_color)
+
+    def set_colors(
+        self, bg_color: str, fg_color: str, hover_bg: str | None = None, hover_fg: str | None = None
+    ) -> None:
+        """Change normal and hover color states dynamically."""
+        self.bg_color = bg_color
+        self.fg_color = fg_color
+        if hover_bg:
+            self.hover_bg = hover_bg
+        if hover_fg:
+            self.hover_fg = hover_fg
+        self.draw(self.bg_color, self.fg_color)
+
+    def cget(self, key: str):
+        """Allow introspection for tests."""
+        if key == "text":
+            return self.text_str
+        return super().cget(key)
+
+    def _on_click(self) -> None:
+        if callable(self.command):
+            self.command()
 
 
 def _bind_hover(
@@ -210,8 +338,8 @@ class SettingsModal:
         self.active_tab = "general"
         self.tab_general_frame: tk.Frame | None = None
         self.tab_vocab_frame: tk.Frame | None = None
-        self.btn_tab_general: tk.Button | None = None
-        self.btn_tab_vocab: tk.Button | None = None
+        self.btn_tab_general: PillButton | None = None
+        self.btn_tab_vocab: PillButton | None = None
 
         # Keycap preview frames
         self.keycaps_dictation_frame: tk.Frame | None = None
@@ -329,7 +457,7 @@ class SettingsModal:
         self.window.geometry(f"{w}x{h}+{x}+{y}")
 
     def _build_ui(self) -> None:
-        """Build the Spotify-style dark 2-column interface."""
+        """Build the Spotify-style dark 2-column interface with rounded pill buttons."""
         # 1. Top Header Banner
         header = tk.Frame(self.window, bg=COLOR_PANEL, height=68)
         header.pack(fill=tk.X, side=tk.TOP)
@@ -388,31 +516,36 @@ class SettingsModal:
         nav_bar = tk.Frame(self.window, bg=COLOR_CANVAS, height=44)
         nav_bar.pack(fill=tk.X, padx=24, pady=(14, 10))
 
-        self.btn_tab_general = tk.Button(
+        self.btn_tab_general = PillButton(
             nav_bar,
             text="⚙️ General y Atajos",
             font=("Segoe UI", 9, "bold"),
-            relief=tk.FLAT,
-            cursor="hand2",
+            bg_color=COLOR_SPOTIFY,
+            fg_color="#000000",
+            hover_bg=COLOR_SPOTIFY_HOVER,
+            hover_fg="#000000",
             padx=20,
-            pady=7,
+            pady=6,
+            canvas_bg=COLOR_CANVAS,
             command=lambda: self._switch_tab("general"),
         )
         self.btn_tab_general.pack(side=tk.LEFT, padx=(0, 10))
-        _bind_hover(self.btn_tab_general, COLOR_SPOTIFY, COLOR_SPOTIFY_HOVER)
 
-        self.btn_tab_vocab = tk.Button(
+        self.btn_tab_vocab = PillButton(
             nav_bar,
             text="📖 Vocabulario Personalizado",
             font=("Segoe UI", 9, "bold"),
-            relief=tk.FLAT,
-            cursor="hand2",
+            bg_color=COLOR_PANEL,
+            fg_color=COLOR_TEXT_MUTED,
+            hover_bg=COLOR_PANEL_HOVER,
+            hover_fg=COLOR_TEXT_WHITE,
+            border_color=COLOR_CARD_BORDER,
             padx=20,
-            pady=7,
+            pady=6,
+            canvas_bg=COLOR_CANVAS,
             command=lambda: self._switch_tab("vocab"),
         )
         self.btn_tab_vocab.pack(side=tk.LEFT)
-        _bind_hover(self.btn_tab_vocab, COLOR_PANEL, COLOR_PANEL_HOVER, COLOR_TEXT_MUTED, COLOR_TEXT_WHITE)
 
         # 3. Bottom Dock Action Bar
         sep_bottom = tk.Frame(self.window, bg=COLOR_CARD_BORDER, height=1)
@@ -421,22 +554,21 @@ class SettingsModal:
         dock = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
         dock.pack(fill=tk.X, side=tk.BOTTOM)
 
-        btn_open_json = tk.Button(
+        btn_open_json = PillButton(
             dock,
             text="📄 Editar config.json",
             font=("Segoe UI", 9),
-            bg=COLOR_INPUT_BG,
-            fg=COLOR_TEXT_MUTED,
-            activebackground=COLOR_PANEL_HOVER,
-            activeforeground=COLOR_TEXT_WHITE,
-            relief=tk.FLAT,
-            cursor="hand2",
+            bg_color=COLOR_INPUT_BG,
+            fg_color=COLOR_TEXT_MUTED,
+            hover_bg=COLOR_PANEL_HOVER,
+            hover_fg=COLOR_TEXT_WHITE,
+            border_color=COLOR_CARD_BORDER,
             padx=16,
             pady=7,
+            canvas_bg=COLOR_PANEL,
             command=self._on_open_json,
         )
         btn_open_json.pack(side=tk.LEFT, padx=24, pady=14)
-        _bind_hover(btn_open_json, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_MUTED, COLOR_TEXT_WHITE)
 
         # In-dock persistent status / toast label (Crash-proof, zero DOM re-packing)
         self.toast_lbl = tk.Label(
@@ -449,39 +581,36 @@ class SettingsModal:
         )
         self.toast_lbl.pack(side=tk.LEFT, padx=16, fill=tk.X, expand=True)
 
-        btn_cancel = tk.Button(
+        btn_cancel = PillButton(
             dock,
             text="Minimizar (Esc)",
             font=("Segoe UI", 9),
-            bg=COLOR_INPUT_BG,
-            fg=COLOR_TEXT_WHITE,
-            activebackground=COLOR_PANEL_HOVER,
-            activeforeground=COLOR_TEXT_WHITE,
-            relief=tk.FLAT,
-            cursor="hand2",
+            bg_color=COLOR_INPUT_BG,
+            fg_color=COLOR_TEXT_WHITE,
+            hover_bg=COLOR_PANEL_HOVER,
+            hover_fg=COLOR_TEXT_WHITE,
+            border_color=COLOR_CARD_BORDER,
             padx=18,
             pady=7,
+            canvas_bg=COLOR_PANEL,
             command=self._on_cancel,
         )
         btn_cancel.pack(side=tk.RIGHT, padx=(8, 24), pady=14)
-        _bind_hover(btn_cancel, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
 
-        btn_save = tk.Button(
+        btn_save = PillButton(
             dock,
             text="💾 Guardar y Aplicar",
             font=("Segoe UI", 9, "bold"),
-            bg=COLOR_SPOTIFY,
-            fg="#000000",
-            activebackground=COLOR_SPOTIFY_HOVER,
-            activeforeground="#000000",
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=22,
+            bg_color=COLOR_SPOTIFY,
+            fg_color="#000000",
+            hover_bg=COLOR_SPOTIFY_HOVER,
+            hover_fg="#000000",
+            padx=24,
             pady=7,
+            canvas_bg=COLOR_PANEL,
             command=self._on_save,
         )
         btn_save.pack(side=tk.RIGHT, padx=8, pady=14)
-        _bind_hover(btn_save, COLOR_SPOTIFY, COLOR_SPOTIFY_HOVER, "#000000", "#000000")
 
         # 4. Central Content Container
         content_container = tk.Frame(self.window, bg=COLOR_CANVAS)
@@ -498,39 +627,43 @@ class SettingsModal:
         self._switch_tab("general")
 
     def _switch_tab(self, tab_name: str) -> None:
-        """Switch between General and Vocabulary tabs with Spotify-style pill styling."""
+        """Switch between General and Vocabulary tabs with smooth Spotify pill transitions."""
         self.active_tab = tab_name
         if tab_name == "general":
             self.tab_vocab_frame.pack_forget()
             self.tab_general_frame.pack(fill=tk.BOTH, expand=True)
 
-            self.btn_tab_general.configure(
-                bg=COLOR_SPOTIFY,
-                fg="#000000",
-                activebackground=COLOR_SPOTIFY_HOVER,
-                activeforeground="#000000",
+            self.btn_tab_general.border_color = None
+            self.btn_tab_general.set_colors(
+                bg_color=COLOR_SPOTIFY,
+                fg_color="#000000",
+                hover_bg=COLOR_SPOTIFY_HOVER,
+                hover_fg="#000000",
             )
-            self.btn_tab_vocab.configure(
-                bg=COLOR_PANEL,
-                fg=COLOR_TEXT_MUTED,
-                activebackground=COLOR_PANEL_HOVER,
-                activeforeground=COLOR_TEXT_WHITE,
+            self.btn_tab_vocab.border_color = COLOR_CARD_BORDER
+            self.btn_tab_vocab.set_colors(
+                bg_color=COLOR_PANEL,
+                fg_color=COLOR_TEXT_MUTED,
+                hover_bg=COLOR_PANEL_HOVER,
+                hover_fg=COLOR_TEXT_WHITE,
             )
         else:
             self.tab_general_frame.pack_forget()
             self.tab_vocab_frame.pack(fill=tk.BOTH, expand=True)
 
-            self.btn_tab_general.configure(
-                bg=COLOR_PANEL,
-                fg=COLOR_TEXT_MUTED,
-                activebackground=COLOR_PANEL_HOVER,
-                activeforeground=COLOR_TEXT_WHITE,
+            self.btn_tab_general.border_color = COLOR_CARD_BORDER
+            self.btn_tab_general.set_colors(
+                bg_color=COLOR_PANEL,
+                fg_color=COLOR_TEXT_MUTED,
+                hover_bg=COLOR_PANEL_HOVER,
+                hover_fg=COLOR_TEXT_WHITE,
             )
-            self.btn_tab_vocab.configure(
-                bg=COLOR_SPOTIFY,
-                fg="#000000",
-                activebackground=COLOR_SPOTIFY_HOVER,
-                activeforeground="#000000",
+            self.btn_tab_vocab.border_color = None
+            self.btn_tab_vocab.set_colors(
+                bg_color=COLOR_SPOTIFY,
+                fg_color="#000000",
+                hover_bg=COLOR_SPOTIFY_HOVER,
+                hover_fg="#000000",
             )
 
     def _build_general_tab(self, parent: tk.Frame) -> None:
@@ -553,13 +686,13 @@ class SettingsModal:
         )
         self.keycaps_dictation_frame = self._create_hotkey_row(
             card_shortcuts,
-            label="Dictado Inteligente:",
+            label="Dictado Inteligente",
             var=self.var_dictation,
             help_text="Habla y transcribe texto en cualquier app activa (default: win+space)",
         )
         self.keycaps_rewrite_frame = self._create_hotkey_row(
             card_shortcuts,
-            label="Reescritura Contextual:",
+            label="Reescritura Contextual",
             var=self.var_rewrite,
             help_text="Pule y mejora la selección de texto con IA (default: ctrl+shift+space)",
         )
@@ -668,22 +801,21 @@ class SettingsModal:
         )
         self.vocab_counter_lbl.pack(side=tk.LEFT)
 
-        btn_restore = tk.Button(
+        btn_restore = PillButton(
             counter_bar,
             text="↩ Restaurar recomendados",
-            font=("Segoe UI", 8),
-            fg=COLOR_GOLD,
-            bg=COLOR_INPUT_BG,
-            activeforeground=COLOR_TEXT_WHITE,
-            activebackground=COLOR_PANEL_HOVER,
-            relief=tk.FLAT,
-            padx=12,
+            font=("Segoe UI", 8, "bold"),
+            bg_color=COLOR_INPUT_BG,
+            fg_color=COLOR_GOLD,
+            hover_bg=COLOR_PANEL_HOVER,
+            hover_fg=COLOR_TEXT_WHITE,
+            border_color=COLOR_CARD_BORDER,
+            padx=14,
             pady=4,
-            cursor="hand2",
+            canvas_bg=COLOR_PANEL,
             command=self._restore_recommended_vocabulary,
         )
         btn_restore.pack(side=tk.RIGHT)
-        _bind_hover(btn_restore, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_GOLD, COLOR_TEXT_WHITE)
 
         # Text editor container
         text_container = tk.Frame(
@@ -771,7 +903,7 @@ class SettingsModal:
                     container,
                     text="+",
                     font=("Segoe UI", 8, "bold"),
-                    fg=COLOR_TEXT_MUTED,
+                    fg=COLOR_TEXT_HINT,
                     bg=COLOR_PANEL,
                 ).pack(side=tk.LEFT, padx=3)
 
@@ -781,8 +913,8 @@ class SettingsModal:
                 font=("Segoe UI", 8, "bold"),
                 fg=COLOR_TEXT_WHITE,
                 bg=COLOR_CHIP_BG,
-                padx=7,
-                pady=2,
+                padx=8,
+                pady=3,
                 relief=tk.FLAT,
                 highlightthickness=1,
                 highlightbackground=COLOR_CHIP_BORDER,
@@ -799,30 +931,45 @@ class SettingsModal:
     def _create_hotkey_row(
         self, parent: tk.Frame, label: str, var: tk.StringVar, help_text: str = ""
     ) -> tk.Frame:
-        """Create an interactive hotkey configuration row with live keycap chips and capture button."""
-        row = tk.Frame(parent, bg=COLOR_PANEL)
-        row.pack(fill=tk.X, pady=5)
+        """Create an interactive hotkey configuration row with spacious Spotify styling and zero clipping."""
+        container = tk.Frame(parent, bg=COLOR_PANEL)
+        container.pack(fill=tk.X, pady=(4, 14))
+
+        # Title and description row on top
+        header_row = tk.Frame(container, bg=COLOR_PANEL)
+        header_row.pack(fill=tk.X, anchor="w")
 
         tk.Label(
-            row,
+            header_row,
             text=label,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 9, "bold"),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=18,
-            anchor="w",
         ).pack(side=tk.LEFT)
 
-        outer_container = tk.Frame(row, bg=COLOR_PANEL)
-        outer_container.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        if help_text:
+            tk.Label(
+                header_row,
+                text=f"— {help_text}",
+                font=("Segoe UI", 8),
+                fg=COLOR_TEXT_MUTED,
+                bg=COLOR_PANEL,
+            ).pack(side=tk.LEFT, padx=(6, 0))
 
-        controls_box = tk.Frame(outer_container, bg=COLOR_PANEL)
-        controls_box.pack(fill=tk.X)
+        # Controls row: keycaps on the left, manual input & capture button on the right
+        controls_row = tk.Frame(container, bg=COLOR_PANEL)
+        controls_row.pack(fill=tk.X, pady=(6, 0))
+
+        chips_frame = tk.Frame(controls_row, bg=COLOR_PANEL)
+        chips_frame.pack(side=tk.LEFT, anchor="w")
+
+        actions_box = tk.Frame(controls_row, bg=COLOR_PANEL)
+        actions_box.pack(side=tk.RIGHT, anchor="e")
 
         entry = tk.Entry(
-            controls_box,
+            actions_box,
             textvariable=var,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
             bg=COLOR_INPUT_BG,
             fg=COLOR_TEXT_WHITE,
             insertbackground=COLOR_SPOTIFY,
@@ -832,41 +979,30 @@ class SettingsModal:
             highlightcolor=COLOR_INPUT_FOCUS,
             width=16,
         )
-        entry.pack(side=tk.LEFT, ipady=4)
-
-        # Chips container
-        chips_frame = tk.Frame(controls_box, bg=COLOR_PANEL)
-        chips_frame.pack(side=tk.LEFT, padx=8)
+        entry.pack(side=tk.LEFT, padx=(0, 8), ipady=3)
 
         # Initial render of keycaps
         self._render_keycap_chips(chips_frame, var.get())
-
-        # Update keycaps live when user edits entry manually
         entry.bind("<KeyRelease>", lambda e: self._render_keycap_chips(chips_frame, var.get()))
 
-        # Interactive Capture Button
-        btn_capture = tk.Button(
-            controls_box,
+        # Interactive Capture Pill Button
+        btn_capture = PillButton(
+            actions_box,
             text="Capturar",
             font=("Segoe UI", 8, "bold"),
-            bg=COLOR_INPUT_BG,
-            fg=COLOR_TEXT_WHITE,
-            activebackground=COLOR_PANEL_HOVER,
-            activeforeground=COLOR_TEXT_WHITE,
-            relief=tk.FLAT,
-            cursor="hand2",
-            padx=10,
-            pady=2,
+            bg_color=COLOR_INPUT_BG,
+            fg_color=COLOR_TEXT_WHITE,
+            hover_bg=COLOR_PANEL_HOVER,
+            hover_fg=COLOR_TEXT_WHITE,
+            border_color=COLOR_INPUT_BORDER,
+            padx=14,
+            pady=4,
+            canvas_bg=COLOR_PANEL,
         )
         btn_capture.pack(side=tk.RIGHT)
-        _bind_hover(btn_capture, COLOR_INPUT_BG, COLOR_PANEL_HOVER, COLOR_TEXT_WHITE, COLOR_TEXT_WHITE)
 
         def start_capture() -> None:
-            btn_capture.configure(
-                text="● Presiona teclas...",
-                bg=COLOR_GOLD,
-                fg="#000000",
-            )
+            btn_capture.set_text("● Presiona teclas...", bg_color=COLOR_GOLD, fg_color="#000000")
             captured_keys: list[str] = []
 
             def on_key(event: tk.Event) -> str:
@@ -916,34 +1052,17 @@ class SettingsModal:
 
             def cleanup() -> None:
                 try:
-                    btn_capture.unbind("<KeyPress>")
                     self.window.unbind("<KeyPress>")
                 except Exception:
                     pass
-                btn_capture.configure(
-                    text="Capturar",
-                    bg=COLOR_INPUT_BG,
-                    fg=COLOR_TEXT_WHITE,
-                )
+                btn_capture.set_text("Capturar", bg_color=COLOR_INPUT_BG, fg_color=COLOR_TEXT_WHITE)
                 self.window.bind("<Escape>", lambda e: self._on_cancel())
 
             self.window.unbind("<Escape>")
-            btn_capture.focus_set()
-            btn_capture.bind("<KeyPress>", on_key)
             self.window.bind("<KeyPress>", on_key)
+            self.window.focus_set()
 
-        btn_capture.configure(command=start_capture)
-
-        if help_text:
-            tk.Label(
-                outer_container,
-                text=help_text,
-                font=("Segoe UI", 7),
-                fg=COLOR_TEXT_HINT,
-                bg=COLOR_PANEL,
-                anchor="w",
-            ).pack(fill=tk.X, pady=(2, 0))
-
+        btn_capture.command = start_capture
         return chips_frame
 
     def _create_unit_entry_row(

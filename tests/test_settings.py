@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from app.main import MUTEX_NAME, MorocoVoiceApplication, VoiceFlowApplication
 from app.ui.settings_window import _persist_groq_api_key_to_env
 
@@ -78,10 +80,22 @@ def test_verify_groq_api_key_online_mocked():
         assert "401" in msg or "inválida" in msg
 
 
-def test_settings_modal_reloads_fresh_config(tmp_path):
+@pytest.fixture(scope="module")
+def tk_root():
+    """Shared Tkinter root for settings UI tests to prevent multiple Tk instances crash."""
+    import tkinter as tk
+    root = tk.Tk()
+    root.withdraw()
+    yield root
+    try:
+        root.destroy()
+    except Exception:
+        pass
+
+
+def test_settings_modal_reloads_fresh_config(tmp_path, tk_root):
     """Ensure SettingsModal always syncs from disk and never displays stale cached hotkeys."""
     import json
-    import tkinter as tk
     from app.contracts import AppConfig
     from app.ui.settings_window import SettingsModal
 
@@ -91,56 +105,46 @@ def test_settings_modal_reloads_fresh_config(tmp_path):
         encoding="utf-8",
     )
 
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        initial_cfg = AppConfig(hotkey_dictation="ctrl+s")
-        saved_calls = []
+    initial_cfg = AppConfig(hotkey_dictation="ctrl+s")
+    saved_calls = []
 
-        modal = SettingsModal(
-            parent=root,
-            current_config=initial_cfg,
-            config_file_path=cfg_file,
-            on_saved=lambda c: saved_calls.append(c),
-        )
+    modal = SettingsModal(
+        parent=tk_root,
+        current_config=initial_cfg,
+        config_file_path=cfg_file,
+        on_saved=lambda c: saved_calls.append(c),
+    )
 
-        # Before show: initial config had ctrl+s
-        assert modal.current_config.hotkey_dictation == "ctrl+s"
+    # Before show: initial config had ctrl+s
+    assert modal.current_config.hotkey_dictation == "ctrl+s"
 
-        # Simulate show() logic: must refresh from disk
-        modal.show()
-        assert modal.current_config.hotkey_dictation == "ctrl+shift+h"
-        assert modal.var_dictation.get() == "ctrl+shift+h"
+    # Simulate show() logic: must refresh from disk
+    modal.show()
+    assert modal.current_config.hotkey_dictation == "ctrl+shift+h"
+    assert modal.var_dictation.get() == "ctrl+shift+h"
 
-        modal._on_cancel()
-    finally:
-        root.destroy()
+    modal._on_cancel()
 
 
-def test_render_keycap_chips_generates_chips():
+def test_render_keycap_chips_generates_chips(tk_root):
     """Verify keycap chips helper generates badges for shortcut tokens."""
     import tkinter as tk
     from app.ui.settings_window import SettingsModal
     from app.contracts import AppConfig
 
-    root = tk.Tk()
-    root.withdraw()
-    try:
-        modal = SettingsModal(
-            parent=root,
-            current_config=AppConfig(),
-            config_file_path="config.json",
-            on_saved=lambda c: None,
-        )
-        frame = tk.Frame(root)
-        modal._render_keycap_chips(frame, "ctrl+shift+h")
-        labels = [w.cget("text") for w in frame.winfo_children() if isinstance(w, tk.Label)]
-        assert "CTRL" in labels
-        assert "SHIFT" in labels
-        assert "H" in labels
-        assert "+" in labels
-    finally:
-        root.destroy()
+    modal = SettingsModal(
+        parent=tk_root,
+        current_config=AppConfig(),
+        config_file_path="config.json",
+        on_saved=lambda c: None,
+    )
+    frame = tk.Frame(tk_root)
+    modal._render_keycap_chips(frame, "ctrl+shift+h")
+    labels = [w.cget("text") for w in frame.winfo_children() if isinstance(w, tk.Label)]
+    assert "CTRL" in labels
+    assert "SHIFT" in labels
+    assert "H" in labels
+    assert "+" in labels
 
 
 def test_tray_menu_has_settings_as_default_item():
@@ -202,4 +206,48 @@ def test_apply_dark_title_bar_handles_null_safely():
     mock_win.winfo_id.return_value = 0
     # Must execute safely without raising
     _apply_dark_title_bar(mock_win)
+
+
+def test_hud_dynamic_width_prevents_clipping(tk_root):
+    """Verify FloatingHUD dynamically expands window width to prevent text clipping."""
+    from app.ui.hud import FloatingHUD
+    from app.contracts import AppState
+
+    hud = FloatingHUD(tk_root)
+    # Default short text
+    hud.show("Escuchando...", state=AppState.RECORDING)
+    assert hud.width >= 260
+
+    # Long startup banner: must dynamically widen beyond text width
+    startup_msg = "MorocoVoice listo • Dictado: CTRL+SHIFT+H"
+    hud.show(startup_msg, state=AppState.INJECTING)
+    assert hud.width >= 350
+    assert hud.label.cget("text") == startup_msg
+    hud.hide()
+
+
+def test_pill_button_widget(tk_root):
+    """Verify Canvas-drawn PillButton creates geometry, tracks clicks and supports text updates."""
+    from app.ui.settings_window import PillButton
+
+    clicked = []
+    btn = PillButton(
+        tk_root,
+        text="Iniciar sesión",
+        command=lambda: clicked.append(True),
+        padx=20,
+        pady=6,
+    )
+    assert btn.cget("text") == "Iniciar sesión"
+    assert btn.w > 40
+    assert btn.h > 20
+
+    # Simulate click
+    btn._on_click()
+    assert clicked == [True]
+
+    # Update text
+    btn.set_text("Cerrar sesión")
+    assert btn.cget("text") == "Cerrar sesión"
+
 

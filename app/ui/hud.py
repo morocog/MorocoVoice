@@ -2,12 +2,14 @@
 
 Uses Win32 WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW and MonitorFromPoint to render
 an unobtrusive floating capsule with mouse-drag repositioning and auto-dismiss watchdog.
+Spotify-inspired dark aesthetic with dynamic width and hardware-accelerated rounded corners.
 """
 
 from __future__ import annotations
 
 import ctypes
 import tkinter as tk
+import tkinter.font as tkfont
 from ctypes import wintypes
 
 from app.contracts import AppState
@@ -60,15 +62,17 @@ class MONITORINFO(ctypes.Structure):
 
 
 class FloatingHUD:
-    """Draggable, non-activating, topmost translucent floating HUD."""
+    """Draggable, non-activating, topmost translucent floating HUD with dynamic width."""
 
     def __init__(self, root: tk.Tk, bottom_margin_px: int = 60) -> None:
         self.root = root
         self.bottom_margin_px = bottom_margin_px
         self.state = AppState.IDLE
 
-        self.width = 250
+        self.width = 280
         self.height = 46
+        self._font_tuple = ("Segoe UI", 9, "bold")
+        self._label_font: tkfont.Font | None = None
 
         # Dragging state
         self._drag_offset_x = 0
@@ -84,22 +88,22 @@ class FloatingHUD:
         """Construct borderless, topmost Tkinter window and configure Win32 styles."""
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
-        self.root.attributes("-alpha", 0.92)
-        self.root.configure(bg="#18181b")
+        self.root.attributes("-alpha", 0.94)
+        self.root.configure(bg="#121212")
 
-        # Frame container with modern capsule look & drag cursor
+        # Frame container with Spotify pill / card look
         self.frame = tk.Frame(
             self.root,
-            bg="#27272a",
+            bg="#181818",
             highlightthickness=1,
-            highlightbackground="#3f3f46",
+            highlightbackground="#282828",
             cursor="fleur",
         )
         self.frame.pack(fill=tk.BOTH, expand=True, padx=2, pady=2)
 
         # Status icon / dot
         self.icon_canvas = tk.Canvas(
-            self.frame, width=18, height=18, bg="#27272a", highlightthickness=0, cursor="fleur"
+            self.frame, width=18, height=18, bg="#181818", highlightthickness=0, cursor="fleur"
         )
         self.icon_canvas.pack(side=tk.LEFT, padx=(12, 6), pady=6)
         self.status_dot = self.icon_canvas.create_oval(2, 2, 16, 16, fill="#ef4444", outline="")
@@ -108,24 +112,27 @@ class FloatingHUD:
         self.label = tk.Label(
             self.frame,
             text="MorocoVoice",
-            font=("Segoe UI", 9, "bold"),
-            fg="#f4f4f5",
-            bg="#27272a",
+            font=self._font_tuple,
+            fg="#FFFFFF",
+            bg="#181818",
             cursor="fleur",
+            anchor="w",
         )
-        self.label.pack(side=tk.LEFT, padx=(0, 8), pady=6, fill=tk.X, expand=True)
+        self.label.pack(side=tk.LEFT, padx=(2, 8), pady=6, fill=tk.BOTH, expand=True)
 
         # Dismiss button "✕"
         self.close_btn = tk.Label(
             self.frame,
             text="✕",
             font=("Segoe UI", 9),
-            fg="#71717a",
-            bg="#27272a",
+            fg="#727272",
+            bg="#181818",
             cursor="hand2",
         )
-        self.close_btn.pack(side=tk.RIGHT, padx=(0, 10), pady=6)
+        self.close_btn.pack(side=tk.RIGHT, padx=(0, 12), pady=6)
         self.close_btn.bind("<Button-1>", lambda e: self.hide())
+        self.close_btn.bind("<Enter>", lambda e: self.close_btn.configure(fg="#FFFFFF"))
+        self.close_btn.bind("<Leave>", lambda e: self.close_btn.configure(fg="#727272"))
 
         # Enable mouse dragging across all widgets with screen coordinates
         for widget in (self.frame, self.label, self.icon_canvas):
@@ -133,7 +140,7 @@ class FloatingHUD:
             widget.bind("<B1-Motion>", self._do_drag)
             widget.bind("<Button-3>", lambda e: self.hide())  # Right-click dismiss
 
-        # Apply Win32 NOACTIVATE and TOOLWINDOW styles
+        # Apply Win32 NOACTIVATE, TOOLWINDOW and DWM rounded corner styles
         self.root.update_idletasks()
         self._apply_win32_styles()
 
@@ -151,12 +158,18 @@ class FloatingHUD:
         self.root.geometry(f"{self.width}x{self.height}+{x}+{y}")
 
     def _apply_win32_styles(self) -> None:
-        """Apply WS_EX_NOACTIVATE to prevent stealing focus from active apps."""
+        """Apply WS_EX_NOACTIVATE to prevent stealing focus and request DWM rounded corners."""
         try:
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             ex_style = ctypes.windll.user32.GetWindowLongW(hwnd, GWL_EXSTYLE)
             new_style = ex_style | WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW
             ctypes.windll.user32.SetWindowLongW(hwnd, GWL_EXSTYLE, new_style)
+
+            # Windows 11 rounded corners preference (DWMWA_WINDOW_CORNER_PREFERENCE = 33, DWMWCP_ROUND = 2)
+            round_val = ctypes.c_int(2)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 33, ctypes.byref(round_val), ctypes.sizeof(round_val)
+            )
         except Exception as e:
             logger.warning("Could not apply Win32 window styles to HUD: %s", e)
 
@@ -191,22 +204,39 @@ class FloatingHUD:
         self.root.geometry(f"{self.width}x{self.height}+{x}+{y}")
 
     def show(self, text: str = "Escuchando...", state: AppState = AppState.RECORDING) -> None:
-        """Update display status and reveal HUD with state-aware watchdog timeout."""
+        """Update display status and reveal HUD with dynamic sizing and state-aware watchdog timeout."""
         self.state = state
+
+        # Dynamic width calculation to prevent any text truncation or clipping
+        if self._label_font is None:
+            try:
+                self._label_font = tkfont.Font(family="Segoe UI", size=9, weight="bold")
+            except Exception:
+                self._label_font = None
+
+        if self._label_font is not None:
+            try:
+                text_width = self._label_font.measure(text)
+                self.width = max(260, text_width + 88)
+            except Exception:
+                self.width = max(260, len(text) * 9 + 88)
+        else:
+            self.width = max(260, len(text) * 9 + 88)
+
         self._reposition()
 
         if state == AppState.RECORDING:
-            self.icon_canvas.itemconfig(self.status_dot, fill="#ef4444")
-            self.label.configure(text=text, fg="#f4f4f5")
+            self.icon_canvas.itemconfig(self.status_dot, fill="#EF4444")
+            self.label.configure(text=text, fg="#FFFFFF")
         elif state == AppState.PROCESSING:
-            self.icon_canvas.itemconfig(self.status_dot, fill="#3b82f6")
-            self.label.configure(text=text, fg="#93c5fd")
+            self.icon_canvas.itemconfig(self.status_dot, fill="#38BDF8")
+            self.label.configure(text=text, fg="#E0F2FE")
         elif state == AppState.INJECTING:
-            self.icon_canvas.itemconfig(self.status_dot, fill="#10b981")
-            self.label.configure(text=text, fg="#a7f3d0")
+            self.icon_canvas.itemconfig(self.status_dot, fill="#1DB954")
+            self.label.configure(text=text, fg="#FFFFFF")
         elif state == AppState.ERROR:
-            self.icon_canvas.itemconfig(self.status_dot, fill="#f59e0b")
-            self.label.configure(text=text, fg="#fde68a")
+            self.icon_canvas.itemconfig(self.status_dot, fill="#FECA66")
+            self.label.configure(text=text, fg="#FEF3C7")
 
         # Auto-dismiss safety watchdog per state
         if self._auto_dismiss_timer is not None:
@@ -224,7 +254,7 @@ class FloatingHUD:
         elif state == AppState.INJECTING:
             timeout_ms = 4000
         elif state == AppState.ERROR:
-            timeout_ms = 3000
+            timeout_ms = 3500
 
         self._auto_dismiss_timer = self.root.after(timeout_ms, self.hide)
 
@@ -234,7 +264,7 @@ class FloatingHUD:
     def show_uipi_alert(self) -> None:
         """Display specific warning when target window is elevated as Administrator."""
         self.show(text="Admin Activo (Ejecuta como Admin)", state=AppState.ERROR)
-        self.root.after(3000, self.hide)
+        self.root.after(3500, self.hide)
 
     def hide(self) -> None:
         """Withdraw HUD window from view."""
