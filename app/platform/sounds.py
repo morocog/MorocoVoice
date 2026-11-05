@@ -1,4 +1,4 @@
-"""Procedural in-memory WAV sound synthesis and playback for MorocoVoice.
+﻿"""Procedural in-memory WAV sound synthesis and playback for MorocoVoice.
 
 Generates blip/pop auditory cues entirely in memory without relying on disk I/O,
 and plays them asynchronously using winsound to prevent UI or audio capture blocking.
@@ -75,10 +75,10 @@ def generate_wav_bytes(
 # Pre-generate sound buffers in memory at module load time
 try:
     _BLIP_BYTES: bytes | None = generate_wav_bytes(
-        freq_start=880.0, freq_end=1320.0, duration_s=0.08, sample_rate=44100, volume=0.25
+        freq_start=880.0, freq_end=1320.0, duration_s=0.10, sample_rate=44100, volume=0.85
     )
     _POP_BYTES: bytes | None = generate_wav_bytes(
-        freq_start=600.0, freq_end=300.0, duration_s=0.07, sample_rate=44100, volume=0.20
+        freq_start=600.0, freq_end=300.0, duration_s=0.09, sample_rate=44100, volume=0.75
     )
 except Exception as e:
     logger.error("Failed to pre-synthesize auditory cues: %s", e)

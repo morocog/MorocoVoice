@@ -1070,12 +1070,14 @@ class SettingsModal:
 
         if help_text:
             tk.Label(
-                header_row,
-                text=f"— {help_text}",
+                container,
+                text=help_text,
                 font=("Segoe UI", 8),
                 fg=COLOR_TEXT_MUTED,
                 bg=COLOR_PANEL,
-            ).pack(side=tk.LEFT, padx=(6, 0))
+                anchor="w",
+                justify=tk.LEFT,
+            ).pack(fill=tk.X, anchor="w", pady=(2, 0))
 
         # Controls row: keycaps on the left, manual input & capture button on the right
         controls_row = tk.Frame(container, bg=COLOR_PANEL)
