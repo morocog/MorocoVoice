@@ -1,7 +1,8 @@
 """Visual settings modal window for MorocoVoice.
 
-Spotify-inspired dark theme UI with fluid layout, pill tabs, custom dark inputs,
-direct synchronization to config.json, and zero stale configuration caches.
+Spotify-inspired dark theme UI with a wide 2-column layout (zero unnecessary scroll),
+fluid pill tabs, custom dark inputs, direct synchronization to config.json,
+and rock-solid in-dock status notifications.
 """
 
 from __future__ import annotations
@@ -24,8 +25,8 @@ logger = get_logger("settings_ui")
 COLOR_CANVAS = "#121212"        # Base canvas background
 COLOR_PANEL = "#181818"         # Elevated card / panel background
 COLOR_PANEL_HOVER = "#242424"   # Hover state for cards / pills
-COLOR_INPUT_BG = "#242424"      # Input fields and selectors
-COLOR_INPUT_BORDER = "#383838"  # Subtle input outline
+COLOR_INPUT_BG = "#222222"      # Input fields and selectors
+COLOR_INPUT_BORDER = "#333333"  # Subtle input outline
 COLOR_INPUT_FOCUS = "#1DB954"   # Active input border (Spotify green)
 COLOR_SPOTIFY = "#1DB954"       # Primary brand green
 COLOR_SPOTIFY_HOVER = "#1ED760" # Hover green
@@ -33,7 +34,7 @@ COLOR_SPOTIFY_ACTIVE = "#169C46"# Pressed green
 COLOR_TEXT_WHITE = "#FFFFFF"    # Crisp primary text
 COLOR_TEXT_MUTED = "#B3B3B3"    # Subtitles and descriptions
 COLOR_TEXT_HINT = "#727272"     # Captions and placeholders
-COLOR_DANGER = "#E91429"        # Error state
+COLOR_DANGER = "#F15E6C"        # Error state
 COLOR_GOLD = "#FECA66"          # Telat accent
 
 RECOMMENDED_VOCABULARY: list[str] = [
@@ -126,7 +127,7 @@ def verify_groq_api_key_online(api_key: str, timeout: float = 2.5) -> tuple[bool
 
 
 class SettingsModal:
-    """Spotify-styled dark modal for MorocoVoice settings."""
+    """Spotify-styled dark modal for MorocoVoice settings with spacious 2-column layout."""
 
     def __init__(
         self,
@@ -144,7 +145,6 @@ class SettingsModal:
         self.window: tk.Toplevel | None = None
         self.vocab_text: tk.Text | None = None
         self.vocab_counter_lbl: tk.Label | None = None
-        self.toast_banner: tk.Frame | None = None
         self.toast_lbl: tk.Label | None = None
 
         # Variables for form controls
@@ -179,7 +179,6 @@ class SettingsModal:
 
     def show(self) -> None:
         """Construct and display the settings modal, always reading fresh config from disk."""
-        # 1. CRITICAL: Reload fresh config from disk to eliminate stale cache bugs
         from app.config import load_config
         try:
             self.current_config = load_config(self.config_path)
@@ -196,8 +195,9 @@ class SettingsModal:
 
         self.window = tk.Toplevel(self.parent)
         self.window.title("MorocoVoice - Configuración")
-        self.window.geometry("680x760")
-        self.window.minsize(620, 680)
+        # Spacious wide layout: 1140x740 for 2-column view with zero scrolling
+        self.window.geometry("1140x740")
+        self.window.minsize(1020, 680)
         self.window.resizable(True, True)
         self.window.configure(bg=COLOR_CANVAS)
 
@@ -211,8 +211,8 @@ class SettingsModal:
     def _center_window(self) -> None:
         """Center the modal on the current display monitor."""
         self.window.update_idletasks()
-        w = 680
-        h = 760
+        w = 1140
+        h = 740
         sw = self.window.winfo_screenwidth()
         sh = self.window.winfo_screenheight()
         x = max(0, (sw - w) // 2)
@@ -220,22 +220,22 @@ class SettingsModal:
         self.window.geometry(f"{w}x{h}+{x}+{y}")
 
     def _build_ui(self) -> None:
-        """Build the Spotify-style dark interface."""
+        """Build the Spotify-style dark 2-column interface."""
         # 1. Top Header Banner
         header = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
         header.pack(fill=tk.X, side=tk.TOP)
 
         brand_frame = tk.Frame(header, bg=COLOR_PANEL)
-        brand_frame.pack(side=tk.LEFT, padx=22, pady=12)
+        brand_frame.pack(side=tk.LEFT, padx=24, pady=12)
 
         icon_dot = tk.Label(
             brand_frame,
             text="🎙️",
-            font=("Segoe UI", 14),
+            font=("Segoe UI", 16),
             bg=COLOR_PANEL,
             fg=COLOR_SPOTIFY,
         )
-        icon_dot.pack(side=tk.LEFT, padx=(0, 10))
+        icon_dot.pack(side=tk.LEFT, padx=(0, 12))
 
         title_box = tk.Frame(brand_frame, bg=COLOR_PANEL)
         title_box.pack(side=tk.LEFT)
@@ -243,14 +243,14 @@ class SettingsModal:
         tk.Label(
             title_box,
             text="MorocoVoice",
-            font=("Segoe UI", 12, "bold"),
+            font=("Segoe UI", 13, "bold"),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
         ).pack(anchor="w")
 
         tk.Label(
             title_box,
-            text="Preferencias de Dictado y Modelos IA",
+            text="Centro de Control de Dictado y Modelos IA",
             font=("Segoe UI", 8),
             fg=COLOR_TEXT_MUTED,
             bg=COLOR_PANEL,
@@ -262,14 +262,14 @@ class SettingsModal:
             font=("Segoe UI", 8, "bold"),
             fg=COLOR_SPOTIFY,
             bg=COLOR_PANEL_HOVER,
-            padx=10,
+            padx=12,
             pady=4,
         )
-        version_pill.pack(side=tk.RIGHT, padx=22, pady=16)
+        version_pill.pack(side=tk.RIGHT, padx=24, pady=16)
 
         # 2. Spotify Pill Navigation Bar
         nav_bar = tk.Frame(self.window, bg=COLOR_CANVAS, height=44)
-        nav_bar.pack(fill=tk.X, padx=22, pady=(14, 6))
+        nav_bar.pack(fill=tk.X, padx=24, pady=(14, 8))
 
         self.btn_tab_general = tk.Button(
             nav_bar,
@@ -277,7 +277,7 @@ class SettingsModal:
             font=("Segoe UI", 9, "bold"),
             relief=tk.FLAT,
             cursor="hand2",
-            padx=16,
+            padx=18,
             pady=6,
             command=lambda: self._switch_tab("general"),
         )
@@ -289,14 +289,14 @@ class SettingsModal:
             font=("Segoe UI", 9, "bold"),
             relief=tk.FLAT,
             cursor="hand2",
-            padx=16,
+            padx=18,
             pady=6,
             command=lambda: self._switch_tab("vocab"),
         )
         self.btn_tab_vocab.pack(side=tk.LEFT)
 
-        # 3. Bottom Dock Action Bar (Packed before notebook to guarantee zero overlap)
-        sep_bottom = tk.Frame(self.window, bg="#282828", height=1)
+        # 3. Bottom Dock Action Bar
+        sep_bottom = tk.Frame(self.window, bg="#242424", height=1)
         sep_bottom.pack(fill=tk.X, side=tk.BOTTOM)
 
         dock = tk.Frame(self.window, bg=COLOR_PANEL, height=64)
@@ -312,11 +312,22 @@ class SettingsModal:
             activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
-            padx=12,
+            padx=14,
             pady=6,
             command=self._on_open_json,
         )
-        btn_open_json.pack(side=tk.LEFT, padx=22, pady=14)
+        btn_open_json.pack(side=tk.LEFT, padx=24, pady=14)
+
+        # In-dock persistent status / toast label (Crash-proof, zero DOM re-packing)
+        self.toast_lbl = tk.Label(
+            dock,
+            text="",
+            font=("Segoe UI", 9, "bold"),
+            bg=COLOR_PANEL,
+            fg=COLOR_SPOTIFY,
+            anchor="w",
+        )
+        self.toast_lbl.pack(side=tk.LEFT, padx=16, fill=tk.X, expand=True)
 
         btn_cancel = tk.Button(
             dock,
@@ -328,11 +339,11 @@ class SettingsModal:
             activeforeground=COLOR_TEXT_WHITE,
             relief=tk.FLAT,
             cursor="hand2",
-            padx=14,
+            padx=16,
             pady=6,
             command=self._on_cancel,
         )
-        btn_cancel.pack(side=tk.RIGHT, padx=(6, 22), pady=14)
+        btn_cancel.pack(side=tk.RIGHT, padx=(6, 24), pady=14)
 
         btn_save = tk.Button(
             dock,
@@ -344,26 +355,15 @@ class SettingsModal:
             activeforeground="#000000",
             relief=tk.FLAT,
             cursor="hand2",
-            padx=18,
+            padx=20,
             pady=6,
             command=self._on_save,
         )
         btn_save.pack(side=tk.RIGHT, padx=6, pady=14)
 
-        # 4. Inline Toast Banner (Spotify-style notification directly in the modal)
-        self.toast_banner = tk.Frame(self.window, bg=COLOR_SPOTIFY, height=36)
-        self.toast_lbl = tk.Label(
-            self.toast_banner,
-            text="✓ Cambios guardados con éxito en config.json",
-            font=("Segoe UI", 9, "bold"),
-            fg="#000000",
-            bg=COLOR_SPOTIFY,
-        )
-        self.toast_lbl.pack(pady=7)
-
-        # 5. Central Scrollable Content Area
+        # 4. Central Content Container
         content_container = tk.Frame(self.window, bg=COLOR_CANVAS)
-        content_container.pack(fill=tk.BOTH, expand=True, padx=22, pady=(0, 6))
+        content_container.pack(fill=tk.BOTH, expand=True, padx=24, pady=(0, 10))
 
         # Tab General Frame
         self.tab_general_frame = tk.Frame(content_container, bg=COLOR_CANVAS)
@@ -412,34 +412,28 @@ class SettingsModal:
             )
 
     def _build_general_tab(self, parent: tk.Frame) -> None:
-        """Build general settings with card-based Spotify aesthetics."""
-        # Canvas + Scrollbar for vertical flexibility
-        canvas = tk.Canvas(parent, bg=COLOR_CANVAS, highlightthickness=0)
-        scrollbar = tk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        scrollable_frame = tk.Frame(canvas, bg=COLOR_CANVAS)
+        """Build general settings with a 2-column grid layout for zero-scroll comfort."""
+        parent.grid_columnconfigure(0, weight=1, uniform="group1")
+        parent.grid_columnconfigure(1, weight=1, uniform="group1")
+        parent.grid_rowconfigure(0, weight=1)
 
-        scrollable_frame.bind(
-            "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
+        # Left Column: Atajos de Teclado + Comportamiento
+        col_left = tk.Frame(parent, bg=COLOR_CANVAS)
+        col_left.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+
+        # Right Column: Motor y Modelos de Inferencia
+        col_right = tk.Frame(parent, bg=COLOR_CANVAS)
+        col_right.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+        # === CARD 1 (LEFT): ATAJOS DE TECLADO (CORE ONLY: 2 KEYS) ===
+        card_shortcuts = self._create_card(
+            col_left, "⌨️ Atajos de Teclado", "Solo 2 atajos oficiales: hablar y corregir selección."
         )
-        canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
-
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Mouse wheel support
-        def _on_mousewheel(event):
-            canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-        canvas.bind_all("<MouseWheel>", _on_mousewheel)
-
-        # === CARD 1: ATAJOS DE TECLADO (CORE ONLY: STRICTLY 2 KEYS) ===
-        card_shortcuts = self._create_card(scrollable_frame, "⌨️ Atajos de Teclado", "Solo 2 atajos oficiales: hablar y corregir selección.")
         self._create_entry_row(
             card_shortcuts,
             label="Dictado Inteligente:",
             var=self.var_dictation,
-            help_text="Habla y transcribe texto en cualquier ventana activa (default: win+space)",
+            help_text="Habla y transcribe texto en cualquier app activa (default: win+space)",
         )
         self._create_entry_row(
             card_shortcuts,
@@ -448,8 +442,27 @@ class SettingsModal:
             help_text="Pule y mejora la selección de texto con IA (default: ctrl+shift+space)",
         )
 
-        # === CARD 2: MOTOR Y MODELOS DE INFERENCIA ===
-        card_engine = self._create_card(scrollable_frame, "🧠 Motor y Modelos de Inferencia", "Configura la transcripción por voz y el modelo LLM.")
+        # === CARD 2 (LEFT): COMPORTAMIENTO Y PORTAPAPELES ===
+        card_behavior = self._create_card(
+            col_left, "⚡ Comportamiento y Portapapeles", "Parámetros de corte de audio y retardo de pegado."
+        )
+        self._create_entry_row(
+            card_behavior,
+            label="Máx. Grabación (seg):",
+            var=self.var_max_sec,
+            help_text="Límite máximo por dictado antes de corte automático (default: 60)",
+        )
+        self._create_entry_row(
+            card_behavior,
+            label="Retardo Pegado (ms):",
+            var=self.var_delay_ms,
+            help_text="Retardo post-inyección para estabilidad de portapapeles (default: 80)",
+        )
+
+        # === CARD 3 (RIGHT): MOTOR Y MODELOS DE INFERENCIA ===
+        card_engine = self._create_card(
+            col_right, "🧠 Motor y Modelos de Inferencia", "Configura la transcripción por voz y el modelo LLM."
+        )
         
         # Engine Combobox
         self._create_combobox_row(
@@ -465,7 +478,7 @@ class SettingsModal:
             label="Idioma STT:",
             var=self.var_stt_language,
             values=["es", "en"],
-            help_text="Idioma base para reconocimiento de voz (es = Español, en = English)",
+            help_text="Idioma base de reconocimiento de voz (es = Español, en = English)",
         )
         # Groq API Key
         self._create_masked_entry_row(
@@ -478,7 +491,7 @@ class SettingsModal:
         # 1-Click Key helper link
         groq_link_row = tk.Frame(card_engine, bg=COLOR_PANEL)
         groq_link_row.pack(fill=tk.X, pady=(2, 6))
-        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=22).pack(side=tk.LEFT)
+        tk.Label(groq_link_row, text="", bg=COLOR_PANEL, width=20).pack(side=tk.LEFT)
         btn_get_key = tk.Button(
             groq_link_row,
             text="🔑 Obtener clave gratuita en console.groq.com (1 clic)",
@@ -506,21 +519,6 @@ class SettingsModal:
             label="Modelo LLM Groq:",
             var=self.var_llm_model,
             help_text="qwen/qwen3.8-27b (Recomendado) o openai/gpt-oss-120b",
-        )
-
-        # === CARD 3: COMPORTAMIENTO Y PARÁMETROS ===
-        card_behavior = self._create_card(scrollable_frame, "⚡ Comportamiento y Portapapeles", "Parámetros de corte de audio y retardo de pegado.")
-        self._create_entry_row(
-            card_behavior,
-            label="Máx. Grabación (seg):",
-            var=self.var_max_sec,
-            help_text="Límite máximo por dictado antes de corte automático (default: 60)",
-        )
-        self._create_entry_row(
-            card_behavior,
-            label="Retardo Pegado (ms):",
-            var=self.var_delay_ms,
-            help_text="Retardo post-inyección para estabilidad de portapapeles (default: 80)",
         )
 
     def _build_vocab_tab(self, parent: tk.Frame) -> None:
@@ -593,7 +591,7 @@ class SettingsModal:
             highlightthickness=1,
             highlightbackground="#242424",
         )
-        outer.pack(fill=tk.X, pady=(0, 14))
+        outer.pack(fill=tk.BOTH, expand=True, pady=(0, 12))
 
         tk.Label(
             outer,
@@ -612,9 +610,9 @@ class SettingsModal:
                 fg=COLOR_TEXT_MUTED,
                 bg=COLOR_PANEL,
                 anchor="w",
-            ).pack(fill=tk.X, pady=(1, 10))
+            ).pack(fill=tk.X, pady=(1, 8))
         else:
-            tk.Frame(outer, height=6, bg=COLOR_PANEL).pack()
+            tk.Frame(outer, height=4, bg=COLOR_PANEL).pack()
 
         return outer
 
@@ -631,7 +629,7 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=22,
+            width=20,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -675,7 +673,7 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=22,
+            width=20,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -751,7 +749,7 @@ class SettingsModal:
             font=("Segoe UI", 9),
             fg=COLOR_TEXT_WHITE,
             bg=COLOR_PANEL,
-            width=22,
+            width=20,
             anchor="w",
         ).pack(side=tk.LEFT)
 
@@ -831,20 +829,17 @@ class SettingsModal:
         )
 
     def _show_toast(self, message: str, is_error: bool = False) -> None:
-        """Display an inline Spotify-style toast notification."""
-        if not self.toast_banner or not self.toast_lbl:
+        """Display an inline status notification directly in the bottom dock bar."""
+        if not self.toast_lbl:
             return
-        bg_col = COLOR_DANGER if is_error else COLOR_SPOTIFY
-        fg_col = "#FFFFFF" if is_error else "#000000"
-        self.toast_banner.configure(bg=bg_col)
-        self.toast_lbl.configure(text=message, bg=bg_col, fg=fg_col)
-        self.toast_banner.pack(fill=tk.X, side=tk.BOTTOM, before=self.window.winfo_children()[-2])
-        self.window.after(3500, self._hide_toast)
+        fg_col = COLOR_DANGER if is_error else COLOR_SPOTIFY
+        self.toast_lbl.configure(text=message, fg=fg_col)
+        self.window.after(4000, self._hide_toast)
 
     def _hide_toast(self) -> None:
-        """Dismiss inline toast."""
-        if self.toast_banner and self.toast_banner.winfo_ismapped():
-            self.toast_banner.pack_forget()
+        """Clear inline status notification."""
+        if self.toast_lbl:
+            self.toast_lbl.configure(text="")
 
     def _on_open_json(self) -> None:
         """Open config.json directly in Notepad for raw inspection."""
@@ -982,7 +977,7 @@ class SettingsModal:
 
             # Spotify-style non-intrusive feedback
             self._show_toast(f"✓ Guardado: Dictado ({dictation_val}) | Reescritura ({rewrite_val})")
-            self.window.after(1400, self._on_cancel)
+            self.window.after(1100, self._on_cancel)
 
         except Exception as e:
             logger.error("Failed to save settings: %s", e)
