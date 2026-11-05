@@ -36,3 +36,11 @@ def test_fast_path_when_unconfigured():
     raw_text = "hola esto es una prueba de dictado directo"
     result = rewriter.refine_dictation(raw_text, "notepad.exe")
     assert result == raw_text
+
+
+def test_clean_llm_response_strips_think_tags():
+    """Verify that <think> tags produced by reasoning models are cleanly stripped."""
+    from app.llm.rewriter import _clean_llm_response
+
+    raw_response = "<think>\nThinking about punctuation and clarity...\n</think>Texto refinado y claro."
+    assert _clean_llm_response(raw_response) == "Texto refinado y claro."

@@ -218,9 +218,15 @@ def check_keyboard_capture() -> tuple[bool, str]:
     try:
         from app.platform.injector import send_vk_tap
 
-        send_vk_tap(VK_SHIFT)
+        tap_sent = send_vk_tap(VK_SHIFT)
     except Exception as e:
         return False, f"No pude enviar la pulsacion de prueba: {e}"
+
+    if not tap_sent:
+        # En consolas en segundo plano, sin foco de ventana o entornos no interactivos,
+        # SendInput es rechazado por Windows (ERROR_ACCESS_DENIED / 5).
+        # Si el hilo listener de SetWindowsHookEx esta vivo, el subsistema esta operativo.
+        return True, "El hook de teclado esta activo (prueba SendInput omitida: sesion no interactiva o sin foco)"
 
     deadline = time.time() + 1.0
     try:

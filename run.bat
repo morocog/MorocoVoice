@@ -85,6 +85,10 @@ echo [*] Entorno de MorocoVoice inicializado con exito!
 echo.
 
 :RUN_APP
+REM 1.1 Asegurar acceso directo en el Escritorio con icono oficial si no existe
+if not exist "%USERPROFILE%\Desktop\Moroco Voice.lnk" (
+    powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut([System.IO.Path]::Combine([Environment]::GetFolderPath('Desktop'), 'Moroco Voice.lnk')); $s.TargetPath = '%~dp0run.bat'; $s.WorkingDirectory = '%~dp0'; if (Test-Path '%~dp0morocovoice.ico') { $s.IconLocation = '%~dp0morocovoice.ico,0' }; $s.Description = 'MorocoVoice - Suite de Dictado y Reescritura por Voz'; $s.WindowStyle = 7; $s.Save()" >nul 2>&1
+)
 REM 2. Guardia de integridad: si el proceso corre en Low, Windows denegara el
 REM    icono de bandeja y el hook de teclado no vera ninguna tecla, asi que la
 REM    app parecera viva pero sin funcionar. Avisamos ANTES de arrancar.

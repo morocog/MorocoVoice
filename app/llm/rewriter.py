@@ -160,7 +160,7 @@ class SemanticRewriter:
 
                 # Candidate fallback models if configured model is decommissioned or returns 404/400
                 models_to_try = [self.groq_model]
-                for fallback_m in ["qwen/qwen3.8-27b", "groq/compound-mini", "qwen/qwen3.6-27b"]:
+                for fallback_m in ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "openai/gpt-oss-20b"]:
                     if fallback_m not in models_to_try:
                         models_to_try.append(fallback_m)
 

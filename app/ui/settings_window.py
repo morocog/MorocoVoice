@@ -419,7 +419,7 @@ class SettingsModal:
             parent,
             label="Modelo LLM Groq:",
             var=self.var_llm_model,
-            help_text="qwen/qwen3.8-27b (Recomendado) o groq/compound-mini",
+            help_text="qwen/qwen3.8-27b (Recomendado) o openai/gpt-oss-120b",
         )
 
         # --- Section 3: Comportamiento ---
