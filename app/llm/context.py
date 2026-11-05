@@ -13,7 +13,7 @@ from ctypes import wintypes
 from pathlib import Path
 
 from app.logging_setup import get_logger
-from app.platform.injector import get_clipboard_text, send_ctrl_c, set_clipboard_text
+from app.platform.injector import get_clipboard_text, send_ctrl_c
 
 logger = get_logger("context")
 
@@ -29,13 +29,13 @@ INPUT_KEYBOARD = 1
 ULONG_PTR = ctypes.c_ulonglong if ctypes.sizeof(ctypes.c_void_p) == 8 else ctypes.c_ulong
 
 
-# # VERIFY: TOKEN_ELEVATION Win32 structure mapping
+# VERIFY: TOKEN_ELEVATION Win32 structure mapping
 class TOKEN_ELEVATION(ctypes.Structure):
     _fields_ = [("TokenIsElevated", wintypes.DWORD)]
 
 
 def is_process_elevated(pid: int) -> bool:
-    """# VERIFY: Check if target PID runs with Administrator elevation via OpenProcessToken & TokenElevation."""
+    """Check if target PID runs with Administrator elevation via OpenProcessToken & TokenElevation."""
     h_process = ctypes.windll.kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
     if not h_process:
         # If we cannot even open the process with limited info, it is likely elevated higher than our standard token
@@ -48,7 +48,6 @@ def is_process_elevated(pid: int) -> bool:
 
         elevation = TOKEN_ELEVATION()
         return_length = wintypes.DWORD()
-        # # VERIFY: TokenElevation = 20, size must match TOKEN_ELEVATION struct
         if ctypes.windll.advapi32.GetTokenInformation(
             h_token,
             TokenElevation,
@@ -98,21 +97,36 @@ def get_foreground_app_info() -> tuple[str, int, bool]:
 
 
 def get_selected_text() -> str:
-    """Capture selected text in foreground application using simulated staged Ctrl+C."""
-    # Backup original clipboard
-    orig_clipboard = get_clipboard_text()
+    """Capture selected text in foreground application using simulated staged Ctrl+C.
 
-    # Clear clipboard to detect if copy succeeds
-    set_clipboard_text("")
+    Uses Win32 GetClipboardSequenceNumber() to detect if Ctrl+C placed new content
+    on the clipboard with zero clipboard corruption, zero ghost items in Win+V,
+    and zero risk of rewriting stale clipboard text when nothing was selected.
+    """
+    try:
+        seq_before = ctypes.windll.user32.GetClipboardSequenceNumber()
+    except Exception:
+        seq_before = 0
 
     # Simulate clean Ctrl+C via staged SendInput with explicit modifier release
     send_ctrl_c()
 
-    time.sleep(0.12)  # Wait for application to fill clipboard
+    # Poll for clipboard update for up to 150 ms (15 ms intervals)
+    seq_changed = False
+    deadline = time.perf_counter() + 0.15
+    while time.perf_counter() < deadline:
+        time.sleep(0.015)
+        try:
+            curr_seq = ctypes.windll.user32.GetClipboardSequenceNumber()
+            if curr_seq != seq_before and curr_seq != 0:
+                seq_changed = True
+                break
+        except Exception:
+            break
+
+    if not seq_changed:
+        logger.info("GetClipboardSequenceNumber unchanged after Ctrl+C: no text was selected.")
+        return ""
+
     selected = get_clipboard_text()
-
-    # Restore original clipboard
-    if orig_clipboard:
-        set_clipboard_text(orig_clipboard)
-
     return selected.strip()

@@ -5,6 +5,7 @@ Ensures non-blocking execution alongside Tkinter main loop with thread-safe call
 
 from __future__ import annotations
 
+import atexit
 import ctypes
 import threading
 import tkinter as tk
@@ -206,7 +207,8 @@ class SystemTrayManager:
 
         self._thread = threading.Thread(target=_run_tray, daemon=True, name="TrayThread")
         self._thread.start()
-        logger.info("System tray icon started in daemon thread.")
+        atexit.register(self.stop)
+        logger.info("System tray icon started in daemon thread with atexit ghost protection.")
 
         def _send_welcome_toast() -> None:
             import time
@@ -252,10 +254,12 @@ class SystemTrayManager:
         self.root.after(0, self.on_shutdown)
 
     def stop(self) -> None:
-        """Stop tray icon."""
-        if self.icon:
+        """Stop tray icon and purge from Windows notification area."""
+        icon = self.icon
+        self.icon = None
+        if icon:
             try:
-                self.icon.stop()
-                logger.info("System tray icon stopped.")
+                icon.stop()
+                logger.info("System tray icon stopped and unregistered from notification area.")
             except Exception as e:
                 logger.warning("Error stopping tray icon: %s", e)
