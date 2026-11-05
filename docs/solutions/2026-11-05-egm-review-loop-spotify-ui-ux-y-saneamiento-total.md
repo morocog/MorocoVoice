@@ -50,3 +50,4 @@ Durante la validación visual y la auditoría multiagente con el protocolo **Ele
 ## 4. Verificación
 
 - Suite completa de pruebas unitarias ampliada a **63 pruebas** (`.\.venv\Scripts\python -m pytest tests -v`), todas en verde (`63 passed`), incluyendo pruebas específicas para `resolve_captured_hotkey_event` con `Win + Space`, preservación de modo `LOCAL`, rechazo de atajos duplicados, `PillButton` y dimensionamiento dinámico del HUD.
+
