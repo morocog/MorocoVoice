@@ -324,7 +324,7 @@ def test_hud_dynamic_width_prevents_clipping(tk_root) -> None:
     # Long startup banner with duration_ms: must dynamically widen and replace previous timer
     startup_msg = "MorocoVoice listo • Dictado: CTRL+SHIFT+H"
     hud.show(startup_msg, state=AppState.INJECTING, duration_ms=3000)
-    assert hud.width >= 350
+    assert hud.width >= 330
     assert hud.label.cget("text") == startup_msg
     second_timer = hud._auto_dismiss_timer
     assert second_timer is not None

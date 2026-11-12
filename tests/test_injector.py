@@ -1,6 +1,7 @@
 """Unit tests for Win32 injector structures, clipboard transactions, and hijack detection."""
 
 import ctypes
+from unittest.mock import patch
 
 import pytest
 
@@ -8,6 +9,7 @@ from app.platform.injector import (
     INPUT,
     emergency_restore,
     get_clipboard_text,
+    inject_text,
     set_clipboard_text,
 )
 
@@ -107,9 +109,6 @@ def test_set_clipboard_empty_string_is_noop():
 
 def test_inject_text_retains_payload_in_clipboard_by_default():
     """Verify that inject_text preserves the injected text in clipboard so the user never loses speech output."""
-    from unittest.mock import patch
-    from app.platform.injector import inject_text
-
     original = get_clipboard_text()
     try:
         with patch("app.platform.injector.send_ctrl_v"):

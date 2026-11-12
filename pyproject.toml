@@ -21,6 +21,10 @@ ignore = [
     "UP006", # Typing compatibility
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# E402: Module level imports in app/main.py must execute after Win32 DPI bootstrap and sys.path injection
+"app/main.py" = ["E402"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
