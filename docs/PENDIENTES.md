@@ -46,6 +46,9 @@
 
 ### 2A · Arquitectura y rendimiento
 - [ ] **Aceleración CUDA opcional:** Permitir selección de GPU NVIDIA en `LocalWhisperEngine` cuando `ctranslate2` detecte hardware compatible con cuDNN.
+- [ ] **Warm Connection & Pre-Streaming (Lección Wispr Flow):** Pre-calentar la conexión hacia la API (Groq/Whisper) o mantener canal HTTP/2 / streaming en cuanto se detecta la intención o el atajo para abatir la latencia de primer token a < 200 ms.
+- [ ] **Head Silence Truncation:** Descartar silencios iniciales del buffer de audio antes de despachar al motor STT para evitar alucinaciones al inicio de frase.
+- [ ] **Context Injection (ASR Priming):** Capturar el título y clase de la ventana activa en Windows (`GetForegroundWindow` / `GetWindowText`) e inyectar el nombre de la app o documento como parámetro `prompt` a Whisper para sesgar el vocabulario hacia términos técnicos y nombres propios corporativos.
 
 ### 2B · UX avanzada
 - [ ] **Selector de dispositivo de audio en ajustes:** Permitir elegir el micrófono deseado en lugar del predeterminado de Windows.
