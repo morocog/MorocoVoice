@@ -8,6 +8,22 @@
 
 ---
 
+## 🔴 0. PENDIENTE CRÍTICO INMEDIATO (ACCIÓN AL LLEGAR A CASA)
+
+> 💡 **Validación Rápida con 1 Clic en Obsidian:** Haz clic directamente sobre la casilla [ ] para marcarla como [x] una vez subido el repositorio en GitHub.
+
+- [ ] **[P0 URGENTE - MOROCOVOICE ANDROID] Creación y empuje del repositorio remoto en GitHub desde laptop de Casa:**
+  - **Ubicación local en Casa:** `C:\Users\moroc\Documents\GitHub\morocovoice-android`
+  - **REGLA DE ORO:** **NO ejecutar `sync.cmd pull` primero.** Lo primero es asegurar el código Android probando y subiendo a GitHub:
+    1. `cd C:\Users\moroc\Documents\GitHub\morocovoice-android`
+    2. `if (-not (Test-Path .git)) { git init -b main }`
+    3. `git add -A ; git commit -m "feat(core): initial release of MorocoVoice Android for Galaxy S24"`
+    4. `gh repo create morocog/morocovoice-android --private --source=. --remote=origin --push`
+    5. `gh repo view morocog/morocovoice-android --web`
+  - Tras este paso, el cierre habitual con `sync.cmd push` sincronizará el estado completo sin advertencias ni códigos huérfanos.
+
+---
+
 ## 🟢 1. Hitos de endurecimiento y auditoría alcanzados (v1.0.4 – v1.0.5)
 
 > 💡 **Validación rápida con 1 clic en Obsidian:** Haz clic directamente sobre la casilla `[x]` para consultar los ítems consolidados en producción.
